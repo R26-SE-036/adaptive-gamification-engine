@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Environment Variables & Secrets (CRITICAL)
+.env
+backend/.env
+ml-service/.env
+**/.env
+
+# Python specific
+__pycache__/
+*.pyc
+*.pkl
+ml-service/__pycache__/
+ml-service/*.pkl
+
+# Build outputs
+dist/
+build/
+frontend/dist/
+
+# System files
+.DS_Store
