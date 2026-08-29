@@ -1,29 +1,22 @@
 import axios from 'axios';
-import { CONFIG } from '../config';
+import { CONFIG, getAuthToken } from '../config';
 
-// Create an axios instance
 const apiClient = axios.create({
-    baseURL: CONFIG.API_BASE_URL,
-    headers: {
-        'Content-Type': 'application/json',
-        // In reality, this would dynamically get the JWT from local storage.
-        // Using a mock auth token for development
-        'Authorization': `Bearer MOCK_JWT_TOKEN_HERE`
-    }
+    baseURL: CONFIG.GAMIFICATION_API_URL,
+    headers: { 'Content-Type': 'application/json' }
 });
 
-// CORRECTION 9: Central API service layer
+apiClient.interceptors.request.use((requestConfig) => {
+    const token = getAuthToken();
+    if (token) {
+        requestConfig.headers.Authorization = `Bearer ${token}`;
+    }
+    return requestConfig;
+});
+
 export const apiService = {
     getProfile(userId) {
         return apiClient.get(`/gamification/profile/${userId}`);
-    },
-
-    getDashboard(userId) {
-        return apiClient.get(`/gamification/dashboard/${userId}`);
-    },
-
-    predictDifficulty(userId, conceptTag) {
-        return apiClient.post('/gamification/predict-difficulty', { userId, conceptTag });
     },
 
     getGame(userId, gameType, conceptTag, difficulty) {
