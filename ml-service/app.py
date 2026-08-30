@@ -103,7 +103,9 @@ def retrain():
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
-    # 8030, matching the platform's convention of 80xx for Python services
+    # 5000 is this service's original port and what the team's .env files
+    # already point at; it collides with nothing else in the platform
     # (Code Coach 8000, Study Guider 8010, PairPath ml-service 8020).
-    # 5000 also clashes with AirPlay on macOS.
-    app.run(port=int(os.environ.get('PORT', 8030)), debug=True)
+    # Configurable via PORT for anyone who needs to move it - on macOS, 5000 is
+    # taken by AirPlay Receiver.
+    app.run(port=int(os.environ.get('PORT', 5000)), debug=True)

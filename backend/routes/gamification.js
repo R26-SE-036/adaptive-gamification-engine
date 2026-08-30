@@ -9,7 +9,7 @@ const QuestionBank = require('../models/QuestionBank');
 const { CodeCoachError, getStrugglingConcepts } = require('../services/codeCoachClient');
 const { CONCEPT_GAME_MAPPING } = require('../config/constants');
 
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || process.env.FLASK_ML_URL || 'http://127.0.0.1:8030';
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || process.env.FLASK_ML_URL || 'http://127.0.0.1:5000';
 
 function getAuthenticatedUserId(req) {
     return req.user?.user_id || req.user?.userId || req.user?.id || req.user?.sub || null;

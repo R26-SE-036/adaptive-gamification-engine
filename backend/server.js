@@ -3,6 +3,27 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
 
+// Optional DNS override, off unless DNS_SERVERS is set.
+//
+// On some Windows machines Node's resolver library cannot read the system DNS
+// configuration and silently falls back to 127.0.0.1, where nothing is
+// listening. Every lookup then fails with ECONNREFUSED - including the SRV
+// lookup that a mongodb+srv:// Atlas URI depends on, so MongoDB never connects
+// while every other tool on the machine resolves names perfectly.
+//
+// Setting DNS_SERVERS (e.g. to your router, 192.168.1.1) points Node at a
+// resolver that works. Unset, nothing changes.
+if (process.env.DNS_SERVERS) {
+    const dns = require('dns');
+    const servers = process.env.DNS_SERVERS.split(',').map((s) => s.trim()).filter(Boolean);
+    try {
+        dns.setServers(servers);
+        console.log(`DNS resolvers overridden: ${servers.join(', ')}`);
+    } catch (err) {
+        console.warn(`Ignoring invalid DNS_SERVERS (${err.message})`);
+    }
+}
+
 const { CODE_COACH_URL } = require('./services/codeCoachClient');
 
 const app = express();
