@@ -8,6 +8,14 @@ ml-service/.env
 **/.env
 
 # Python specific
+# Virtualenvs. Both spellings, and any depth: a venv is machine-specific
+# (its launcher scripts hardcode absolute paths, so a committed one is broken
+# the moment anyone checks it out somewhere else) and it dwarfs the real
+# source - 339 files against 2 in one careless `git add -A`.
+.venv/
+venv/
+**/.venv/
+**/venv/
 __pycache__/
 *.pyc
 *.pkl

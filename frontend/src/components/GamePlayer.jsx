@@ -62,6 +62,12 @@ const GamePlayer = () => {
     // from the URL param instead meant no instructions appeared and the wrong
     // interaction was shown.
     const activeGameType = state.currentQuestion?.gameType || gameType;
+
+    // Same reasoning for difficulty: the URL says 'beginner' (Code Coach's
+    // wording), the question served says 'Easy' (this engine's). Reporting the
+    // URL value recorded a difficulty the student never actually played, which
+    // then fed Code Coach's mastery model.
+    const activeDifficulty = state.currentQuestion?.difficulty || difficulty;
     const adaptationRecorded = useRef(false);
 
     const dragItem = React.useRef();
@@ -108,7 +114,7 @@ const GamePlayer = () => {
                             recommendation_id: recommendation.recommendationId,
                             game_id: recommendation.gameId || res.data.id,
                             game_type: recommendation.gameType || gameType,
-                            difficulty_level: recommendation.difficultyLevel || difficulty,
+                            difficulty_level: activeDifficulty,
                             support_level: recommendation.supportLevel || 'guided',
                             rationale: recommendation.rationale || `Assigned ${gameType} for ${conceptTag}`,
                             based_on_mastery_level: recommendation.basedOnMasteryLevel,
@@ -162,7 +168,7 @@ const GamePlayer = () => {
                         recommendation_id: recommendation?.recommendationId,
                         game_id: recommendation?.gameId || state.currentQuestion.id,
                         game_type: activeGameType,
-                        difficulty_level: difficulty,
+                        difficulty_level: activeDifficulty,
                         support_level: recommendation?.supportLevel || 'guided',
                         score_percent: res.data.score,
                         error_count: res.data.score > 0 ? 0 : 1,
