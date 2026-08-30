@@ -3,14 +3,13 @@ const router = express.Router();
 const axios = require('axios');
 
 const authMiddleware = require('../middleware/auth');
-const CodeDiagnostic = require('../models/CodeDiagnostic');
 const GameSession = require('../models/GameSession');
-const LearningEvent = require('../models/LearningEvent');
 const PlayerProfile = require('../models/PlayerProfile');
 const QuestionBank = require('../models/QuestionBank');
+const { CodeCoachError, getStrugglingConcepts } = require('../services/codeCoachClient');
 const { CONCEPT_GAME_MAPPING } = require('../config/constants');
 
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || process.env.FLASK_ML_URL || 'http://127.0.0.1:5000';
+const ML_SERVICE_URL = process.env.ML_SERVICE_URL || process.env.FLASK_ML_URL || 'http://127.0.0.1:8030';
 
 function getAuthenticatedUserId(req) {
     return req.user?.user_id || req.user?.userId || req.user?.id || req.user?.sub || null;
@@ -36,14 +35,17 @@ router.get('/dashboard/:userId', async (req, res) => {
             return res.status(403).json({ error: 'Forbidden: cannot access this user dashboard' });
         }
         
-        // Count repeat errors per conceptTag
-        const pipeline = [
-            { $match: { userId, conceptTag: { $exists: true, $ne: null }, status: { $ne: 'resolved' } } },
-            { $group: { _id: '$conceptTag', repeatCount: { $sum: 1 } } },
-            { $sort: { repeatCount: -1 } }
-        ];
-        
-        const weaknesses = await CodeDiagnostic.aggregate(pipeline);
+        // Struggle data comes from Code Coach, which owns it. This used to
+        // aggregate a local CodeDiagnostic collection that nothing populated
+        // except a seed script of invented errors, while the frontend read the
+        // real numbers straight from Code Coach - so the dashboard and the
+        // difficulty prediction disagreed about the same student.
+        const struggles = await getStrugglingConcepts(req.accessToken);
+
+        const weaknesses = struggles
+            .filter((s) => s.concept_tag)
+            .map((s) => ({ _id: s.concept_tag, repeatCount: s.repeat_count || 0 }))
+            .sort((a, b) => b.repeatCount - a.repeatCount);
         
         // Map concepts to strictly assigned game types based on domain rules
         const results = weaknesses.map(w => ({
@@ -85,7 +87,11 @@ router.post('/predict-difficulty', async (req, res) => {
             avg_time_seconds = pastSessions.reduce((sum, s) => sum + (s.timeTakenSeconds || 0), 0) / games_played;
         }
 
-        const repeat_error_count = await CodeDiagnostic.countDocuments({ userId, conceptTag, status: { $ne: 'resolved' } });
+        // Unresolved occurrences of this concept, from Code Coach. `active_count`
+        // is its name for what the old local query called status != resolved.
+        const struggles = await getStrugglingConcepts(req.accessToken);
+        const match = struggles.find((s) => s.concept_tag === conceptTag);
+        const repeat_error_count = match ? (match.active_count ?? match.repeat_count ?? 0) : 0;
 
         const mlPayload = {
             avg_score,
@@ -233,25 +239,14 @@ router.post('/game/submit', async (req, res) => {
         });
         await session.save();
 
-        // Emit LearningEvent
-        const evt = new LearningEvent({
-            eventType: 'game_session_completed',
-            userId,
-            learningSessionId,
-            payload: {
-                gameSessionId: session.gameSessionId,
-                questionId,
-                gameType,
-                conceptTag,
-                score: finalScore,
-                difficultyLevel,
-                hintUsage: computedHintUsage,
-                attemptCount: computedAttemptCount,
-                timeTakenSeconds: computedTimeTaken,
-                isCorrect
-            }
-        });
-        await evt.save();
+        // The platform-wide record of this game lives in Code Coach, not here.
+        // The frontend posts the result to /api/v1/gamification/me/session-results
+        // as soon as this call returns, which is what updates the student's
+        // concept mastery and puts the game on their activity timeline.
+        //
+        // A local LearningEvent used to be written here too. Nothing ever read
+        // it - it was a write-only mirror of a Code Coach concept, and a third
+        // place for the same fact to disagree with the other two.
 
         // Badge and Streak Logic (Gamification Engine)
         let profile = await PlayerProfile.findOne({ userId });
