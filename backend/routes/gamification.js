@@ -3,12 +3,11 @@ const router = express.Router();
 const axios = require('axios');
 
 const authMiddleware = require('../middleware/auth');
-const CodeDiagnostic = require('../models/CodeDiagnostic');
 const GameSession = require('../models/GameSession');
-const LearningEvent = require('../models/LearningEvent');
 const PlayerProfile = require('../models/PlayerProfile');
 const QuestionBank = require('../models/QuestionBank');
-const { CONCEPT_GAME_MAPPING } = require('../config/constants');
+const { CodeCoachError, getStrugglingConcepts } = require('../services/codeCoachClient');
+const { CONCEPT_GAME_MAPPING, GAME_TYPES, DIFFICULTY_LEVELS, DIFFICULTY_ALIASES } = require('../config/constants');
 
 const ML_SERVICE_URL = process.env.ML_SERVICE_URL || process.env.FLASK_ML_URL || 'http://127.0.0.1:5000';
 
@@ -36,14 +35,17 @@ router.get('/dashboard/:userId', async (req, res) => {
             return res.status(403).json({ error: 'Forbidden: cannot access this user dashboard' });
         }
         
-        // Count repeat errors per conceptTag
-        const pipeline = [
-            { $match: { userId, conceptTag: { $exists: true, $ne: null }, status: { $ne: 'resolved' } } },
-            { $group: { _id: '$conceptTag', repeatCount: { $sum: 1 } } },
-            { $sort: { repeatCount: -1 } }
-        ];
-        
-        const weaknesses = await CodeDiagnostic.aggregate(pipeline);
+        // Struggle data comes from Code Coach, which owns it. This used to
+        // aggregate a local CodeDiagnostic collection that nothing populated
+        // except a seed script of invented errors, while the frontend read the
+        // real numbers straight from Code Coach - so the dashboard and the
+        // difficulty prediction disagreed about the same student.
+        const struggles = await getStrugglingConcepts(req.accessToken);
+
+        const weaknesses = struggles
+            .filter((s) => s.concept_tag)
+            .map((s) => ({ _id: s.concept_tag, repeatCount: s.repeat_count || 0 }))
+            .sort((a, b) => b.repeatCount - a.repeatCount);
         
         // Map concepts to strictly assigned game types based on domain rules
         const results = weaknesses.map(w => ({
@@ -85,7 +87,11 @@ router.post('/predict-difficulty', async (req, res) => {
             avg_time_seconds = pastSessions.reduce((sum, s) => sum + (s.timeTakenSeconds || 0), 0) / games_played;
         }
 
-        const repeat_error_count = await CodeDiagnostic.countDocuments({ userId, conceptTag, status: { $ne: 'resolved' } });
+        // Unresolved occurrences of this concept, from Code Coach. `active_count`
+        // is its name for what the old local query called status != resolved.
+        const struggles = await getStrugglingConcepts(req.accessToken);
+        const match = struggles.find((s) => s.concept_tag === conceptTag);
+        const repeat_error_count = match ? (match.active_count ?? match.repeat_count ?? 0) : 0;
 
         const mlPayload = {
             avg_score,
@@ -125,11 +131,39 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
             return res.status(403).json({ error: 'Forbidden: cannot fetch another user game' });
         }
         
-        // Dynamically pull a random question from MongoDB Atlas
-        let questions = await QuestionBank.aggregate([
-            { $match: { gameType, conceptTag, difficulty } },
-            { $sample: { size: 1 } }
-        ]);
+        // Resolve the requested game type to one this engine actually implements.
+        //
+        // Code Coach recommends a KIND of practice using its own vocabulary
+        // (bug_hunt, loop_tracer, condition_debug, debug_challenge), and the
+        // frontend passes that straight through in the URL. The question bank is
+        // keyed by THIS engine's three types, so an unresolved value matched
+        // nothing: the query fell through to the concept-only fallback, which
+        // ignores difficulty and returns a game of a different type than the URL
+        // claims. That is why games appeared but the UI rendered wrong.
+        const resolvedGameType = GAME_TYPES.includes(gameType)
+            ? gameType
+            : CONCEPT_GAME_MAPPING[conceptTag];
+
+        // Difficulty needs the same treatment: Code Coach says 'beginner' /
+        // 'intermediate', the bank stores Easy / Medium / Hard.
+        const resolvedDifficulty = DIFFICULTY_LEVELS.includes(difficulty)
+            ? difficulty
+            : DIFFICULTY_ALIASES[String(difficulty || '').toLowerCase()];
+
+        let questions = resolvedGameType && resolvedDifficulty
+            ? await QuestionBank.aggregate([
+                { $match: { gameType: resolvedGameType, conceptTag, difficulty: resolvedDifficulty } },
+                { $sample: { size: 1 } }
+            ])
+            : [];
+
+        // Same type, any difficulty, before giving up on the type entirely.
+        if (questions.length === 0 && resolvedGameType) {
+            questions = await QuestionBank.aggregate([
+                { $match: { gameType: resolvedGameType, conceptTag } },
+                { $sample: { size: 1 } }
+            ]);
+        }
 
         if (questions.length === 0) {
             // fallback logic if exact match not found
@@ -179,16 +213,27 @@ router.post('/game/submit', async (req, res) => {
             return res.status(404).json({ error: 'Question not found in database' });
         }
 
+        // The game type stored on the QUESTION is the truth. The client may send
+        // Code Coach's vocabulary (loop_tracer), which is neither a valid grading
+        // branch nor a valid GameSession enum value.
+        const effectiveGameType = question.gameType || gameType;
+
         let isCorrect = false;
         try {
-            if (gameType === 'BugHunt') {
+            // Grade against the game type stored on the QUESTION, not the one
+            // the client sent. The client's value may be Code Coach's
+            // vocabulary (loop_tracer), which used to fall through to the else
+            // branch and reject a perfectly valid answer as
+            // "Invalid gameType submitted". It is also simply not the client's
+            // fact to assert.
+            if (effectiveGameType === 'BugHunt') {
                 isCorrect = String(selectedAnswer) === String(question.correctAnswer);
-            } else if (gameType === 'DragDrop') {
+            } else if (effectiveGameType === 'DragDrop') {
                 isCorrect = Array.isArray(selectedAnswer) &&
                             Array.isArray(question.correctAnswer) &&
                             selectedAnswer.length === question.correctAnswer.length &&
                             selectedAnswer.every((val, index) => String(val) === String(question.correctAnswer[index]));
-            } else if (gameType === 'CodeTrace') {
+            } else if (effectiveGameType === 'CodeTrace') {
                 isCorrect = String(selectedAnswer).trim().toLowerCase() === String(question.correctAnswer).trim().toLowerCase();
             } else {
                 return res.status(400).json({ error: 'Invalid gameType submitted' });
@@ -219,7 +264,10 @@ router.post('/game/submit', async (req, res) => {
         const session = new GameSession({
             userId,
             learningSessionId,
-            gameType,
+            // effectiveGameType, not the client's value: GameSession enforces an
+            // enum of this engine's three types, so persisting Code Coach's
+            // vocabulary threw a validation error and lost the whole result.
+            gameType: effectiveGameType,
             conceptTag,
             errorType,
             difficultyLevel,
@@ -233,25 +281,14 @@ router.post('/game/submit', async (req, res) => {
         });
         await session.save();
 
-        // Emit LearningEvent
-        const evt = new LearningEvent({
-            eventType: 'game_session_completed',
-            userId,
-            learningSessionId,
-            payload: {
-                gameSessionId: session.gameSessionId,
-                questionId,
-                gameType,
-                conceptTag,
-                score: finalScore,
-                difficultyLevel,
-                hintUsage: computedHintUsage,
-                attemptCount: computedAttemptCount,
-                timeTakenSeconds: computedTimeTaken,
-                isCorrect
-            }
-        });
-        await evt.save();
+        // The platform-wide record of this game lives in Code Coach, not here.
+        // The frontend posts the result to /api/v1/gamification/me/session-results
+        // as soon as this call returns, which is what updates the student's
+        // concept mastery and puts the game on their activity timeline.
+        //
+        // A local LearningEvent used to be written here too. Nothing ever read
+        // it - it was a write-only mirror of a Code Coach concept, and a third
+        // place for the same fact to disagree with the other two.
 
         // Badge and Streak Logic (Gamification Engine)
         let profile = await PlayerProfile.findOne({ userId });

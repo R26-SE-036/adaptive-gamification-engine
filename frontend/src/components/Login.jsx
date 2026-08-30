@@ -1,9 +1,22 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { formatApiError } from '../config';
+import { CONFIG, formatApiError } from '../config';
+import { devLoginEnabled, redirectToPortal } from '../lib/codeguru-auth';
 import { Layers, LogIn, Mail, Lock, AlertCircle } from 'lucide-react';
 
+/**
+ * Sign-in for the gamification engine.
+ *
+ * Code Guru has one login surface: the shared portal. In a deployed build this
+ * page only sends the student there and lets the portal hand the session back
+ * (AuthContext picks it up from the URL fragment).
+ *
+ * On localhost with VITE_ENABLE_DEV_LOGIN set, the form below renders instead
+ * so this service can be worked on without running the portal alongside it. It
+ * is not a second implementation - it calls the same Code Coach endpoint with
+ * the same fields through the same client. Only the hosting differs.
+ */
 export default function Login() {
     const { login, isAuthenticated, loading } = useAuth();
     const navigate = useNavigate();
@@ -13,10 +26,31 @@ export default function Login() {
     const [error, setError] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
+    const localLoginAllowed = devLoginEnabled(CONFIG.DEV_LOGIN_FLAG);
     const redirectTo = location.state?.from || '/';
+
+    useEffect(() => {
+        // Deployed builds have no login of their own: go to the portal and come
+        // back here signed in.
+        if (!loading && !isAuthenticated && !localLoginAllowed) {
+            redirectToPortal(CONFIG.PORTAL_URL, {
+                returnTo: window.location.origin + '/'
+            });
+        }
+    }, [loading, isAuthenticated, localLoginAllowed]);
 
     if (!loading && isAuthenticated) {
         return <Navigate to={redirectTo} replace />;
+    }
+
+    if (!localLoginAllowed) {
+        return (
+            <div style={{ maxWidth: '480px', margin: '80px auto', textAlign: 'center' }}>
+                <Layers size={40} style={{ color: 'var(--cg-accent)' }} />
+                <h2 style={{ marginTop: '16px' }}>Code Guru</h2>
+                <p style={{ color: 'var(--cg-muted)' }}>Taking you to the Code Guru sign-in...</p>
+            </div>
+        );
     }
 
     const handleSubmit = async (event) => {
@@ -38,7 +72,7 @@ export default function Login() {
         <div style={{ maxWidth: '480px', margin: '60px auto' }}>
             <div style={{ textAlign: 'center', marginBottom: '32px' }}>
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
-                    <Layers size={48} color="#8b5cf6" />
+                    <Layers size={48} style={{ color: 'var(--cg-accent)' }} />
                 </div>
                 <h2 style={{ marginBottom: '8px' }}>Sign in to Code Guru</h2>
                 <p style={{ color: 'var(--text-secondary)' }}>

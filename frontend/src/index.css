@@ -1,15 +1,16 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
-
+/* Fonts and every colour value now come from styles/codeguru-theme.css, which
+   main.jsx imports first. This file keeps its own variable names so no
+   component has to change, but they are aliases now, not values. */
 :root {
-  --bg-color: #f8fafc;
-  --panel-bg: rgba(255, 255, 255, 0.6);
-  --text-primary: #1e293b;
-  --text-secondary: #475569;
-  --accent-color: #8b5cf6; /* Vibrant Purple */
-  --accent-hover: #7c3aed;
-  --success-color: #059669;
-  --danger-color: #e11d48;
-  --warning-color: #d97706;
+  --bg-color: var(--cg-page);
+  --panel-bg: var(--cg-glass);
+  --text-primary: var(--cg-ink);
+  --text-secondary: var(--cg-muted);
+  --accent-color: var(--cg-accent);
+  --accent-hover: var(--cg-accent-strong);
+  --success-color: var(--cg-ok);
+  --danger-color: var(--cg-danger);
+  --warning-color: var(--cg-warn);
 }
 
 * {
@@ -20,13 +21,10 @@
 
 body {
   background-color: var(--bg-color);
-  background-image: 
-    radial-gradient(at 0% 0%, hsla(328, 100%, 85%, 0.6) 0px, transparent 50%),
-    radial-gradient(at 80% 0%, hsla(189, 100%, 85%, 0.6) 0px, transparent 50%),
-    radial-gradient(at 40% 100%, hsla(50, 100%, 85%, 0.6) 0px, transparent 50%);
+  background-image: var(--cg-page-wash);
   background-attachment: fixed;
-  color: var(--text-primary);
-  font-family: 'Outfit', sans-serif;
+  color: var(--cg-body);
+  font-family: var(--cg-font);
   min-height: 100vh;
   display: flex;
   flex-direction: column;
@@ -36,27 +34,28 @@ body {
   background: var(--panel-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.8);
-  border-radius: 20px;
+  border: 1px solid var(--cg-glass-border);
+  border-radius: var(--cg-radius-lg);
   padding: 24px;
-  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.08);
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--cg-shadow-md);
+  transition: transform var(--cg-slow) var(--cg-ease), box-shadow var(--cg-slow) var(--cg-ease);
 }
 
 .glass-panel:hover {
   transform: translateY(-4px);
-  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--cg-shadow-lg);
 }
 
 .profile-banner {
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.9), rgba(248, 250, 252, 0.8));
-  border: 2px solid white;
+  background: linear-gradient(145deg,
+      rgb(var(--cg-rgb-card) / 0.92), rgb(var(--cg-rgb-card-alt) / 0.82));
+  border: 2px solid var(--cg-glass-border);
 }
 
 h1, h2, h3 {
   font-weight: 700;
   margin-bottom: 16px;
-  background: linear-gradient(135deg, #ec4899, #8b5cf6, #3b82f6);
+  background: var(--cg-gradient-text);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-size: 200% auto;
@@ -74,57 +73,58 @@ h2 { font-size: 2rem; }
 h3 { font-size: 1.4rem; }
 
 .btn {
-  background: linear-gradient(135deg, var(--accent-color), #6d28d9);
-  color: white;
+  background: var(--cg-gradient-accent);
+  color: var(--cg-on-accent);
   border: none;
   padding: 12px 24px;
   border-radius: 12px;
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--cg-font);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
   font-size: 1.05rem;
-  box-shadow: 0 4px 14px 0 rgba(139, 92, 246, 0.39);
+  box-shadow: var(--cg-shadow-accent);
 }
 
 .btn:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(139, 92, 246, 0.23);
+  box-shadow: 0 6px 20px rgb(var(--cg-rgb-accent) / 0.28);
 }
 
 .btn-secondary {
-  background: white;
+  background: var(--cg-card);
   border: 2px solid var(--accent-color);
   color: var(--accent-color);
   box-shadow: none;
 }
 
 .btn-secondary:hover {
-  background: rgba(139, 92, 246, 0.05);
+  background: rgb(var(--cg-rgb-accent) / 0.06);
   transform: translateY(-2px);
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #f43f5e, #be123c);
-  box-shadow: 0 4px 14px 0 rgba(225, 29, 72, 0.39);
+  background: linear-gradient(135deg,
+      rgb(var(--cg-rgb-danger)), rgb(var(--cg-rgb-danger) / 0.78));
+  box-shadow: 0 4px 14px 0 rgb(var(--cg-rgb-danger) / 0.35);
 }
 
 .btn-danger:hover {
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(225, 29, 72, 0.23);
+  box-shadow: 0 6px 20px rgb(var(--cg-rgb-danger) / 0.24);
 }
 
 .code-block {
-  font-family: 'JetBrains Mono', monospace;
-  background-color: #1e293b;
+  font-family: var(--cg-font-mono);
+  background-color: var(--cg-code-bg);
   padding: 20px;
   border-radius: 12px;
-  border: 4px solid #f1f5f9;
+  border: 1px solid var(--cg-border);
   font-size: 0.95rem;
   line-height: 1.6;
-  color: #f8fafc;
+  color: var(--cg-code-ink);
   overflow-x: auto;
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: inset 0 1px 3px rgb(var(--cg-rgb-ink) / 0.06);
 }
 
 .code-line {
@@ -136,12 +136,12 @@ h3 { font-size: 1.4rem; }
 }
 
 .code-line.interactive:hover {
-  background-color: rgba(255, 255, 255, 0.15);
+  background-color: rgb(var(--cg-rgb-accent) / 0.10);
 }
 
 .code-line.selected {
-  background-color: rgba(244, 63, 94, 0.3);
-  border-left: 4px solid #f43f5e;
+  background-color: rgb(var(--cg-rgb-danger) / 0.14);
+  border-left: 4px solid var(--cg-danger);
 }
 
 .badge {
@@ -152,13 +152,14 @@ h3 { font-size: 1.4rem; }
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  box-shadow: var(--cg-shadow-sm);
 }
 
-.badge-easy { background-color: #d1fae5; color: var(--success-color); border: 1px solid #10b981; }
-.badge-medium { background-color: #fef3c7; color: var(--warning-color); border: 1px solid #f59e0b; }
-.badge-hard { background-color: #ffe4e6; color: var(--danger-color); border: 1px solid #e11d48; }
-.badge-critical { background-color: #7f1d1d; color: #fecaca; border: 1px solid #ef4444; }
+.badge-easy { background-color: var(--cg-ok-soft); color: var(--cg-ok); border: 1px solid rgb(var(--cg-rgb-ok) / 0.4); }
+.badge-medium { background-color: var(--cg-warn-soft); color: var(--cg-warn); border: 1px solid rgb(var(--cg-rgb-warn) / 0.4); }
+.badge-hard { background-color: var(--cg-danger-soft); color: var(--cg-danger); border: 1px solid rgb(var(--cg-rgb-danger) / 0.4); }
+/* was dark maroon on a light page - the only badge that did not match the set */
+.badge-critical { background-color: var(--cg-danger); color: var(--cg-on-accent); border: 1px solid var(--cg-danger); }
 
 .app-container {
   max-width: 1200px;
@@ -175,14 +176,14 @@ h3 { font-size: 1.4rem; }
 }
 
 .hint-box {
-  background: #fef3c7;
-  border-left: 5px solid var(--warning-color);
+  background: var(--cg-warn-soft);
+  border-left: 5px solid var(--cg-warn);
   padding: 16px 20px;
   border-radius: 0 12px 12px 0;
   margin: 20px 0;
-  color: #b45309;
+  color: var(--cg-warn);
   font-weight: 500;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--cg-shadow-sm);
 }
 
 /* Auth & Header */
@@ -213,9 +214,9 @@ h3 { font-size: 1.4rem; }
   align-items: center;
   gap: 10px;
   padding: 8px 16px;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgb(var(--cg-rgb-card) / 0.7);
   border-radius: 12px;
-  border: 1px solid rgba(139, 92, 246, 0.2);
+  border: 1px solid rgb(var(--cg-rgb-accent) / 0.2);
 }
 
 .user-chip strong {
@@ -249,17 +250,19 @@ h3 { font-size: 1.4rem; }
 
 .form-input {
   padding: 12px 16px;
-  border: 2px solid #e2e8f0;
+  border: 2px solid var(--cg-border);
   border-radius: 10px;
-  font-family: 'Outfit', sans-serif;
+  font-family: var(--cg-font);
   font-size: 1rem;
-  transition: border-color 0.2s;
-  background: white;
+  color: var(--cg-ink);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background: var(--cg-card);
 }
 
 .form-input:focus {
   outline: none;
-  border-color: var(--accent-color);
+  border-color: var(--cg-accent);
+  box-shadow: var(--cg-focus);
 }
 
 .auth-error {
@@ -267,8 +270,8 @@ h3 { font-size: 1.4rem; }
   align-items: center;
   gap: 8px;
   padding: 12px 16px;
-  background: rgba(225, 29, 72, 0.08);
-  border: 1px solid rgba(225, 29, 72, 0.2);
+  background: var(--cg-danger-soft);
+  border: 1px solid rgb(var(--cg-rgb-danger) / 0.25);
   border-radius: 10px;
   color: var(--danger-color);
   font-size: 0.9rem;
@@ -278,9 +281,9 @@ h3 { font-size: 1.4rem; }
 .auth-demo-note {
   margin-top: 24px;
   padding: 16px;
-  background: rgba(139, 92, 246, 0.06);
+  background: rgb(var(--cg-rgb-accent) / 0.06);
   border-radius: 12px;
-  border: 1px dashed rgba(139, 92, 246, 0.3);
+  border: 1px dashed rgb(var(--cg-rgb-accent) / 0.3);
   font-size: 0.9rem;
   color: var(--text-secondary);
 }
@@ -290,7 +293,7 @@ h3 { font-size: 1.4rem; }
 }
 
 .auth-demo-note code {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--cg-code-bg);
   padding: 2px 6px;
   border-radius: 4px;
   font-size: 0.85rem;
@@ -305,8 +308,8 @@ h3 { font-size: 1.4rem; }
 .struggle-metric {
   padding: 12px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.75);
-  border: 1px solid rgba(139, 92, 246, 0.15);
+  background: rgb(var(--cg-rgb-card) / 0.75);
+  border: 1px solid rgb(var(--cg-rgb-accent) / 0.16);
 }
 
 .struggle-metric span {

@@ -1,13 +1,18 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { codeCoachApi } from '../services/codeCoachApi';
 import {
+    CONFIG,
     clearAuthSession,
+    getAuthToken,
+    getRefreshToken,
+    getRuntimeLearningSessionId,
     getRuntimeUser,
     getRuntimeUserId,
     isAuthenticated,
     normalizeCodeCoachUser,
     setAuthSession
 } from '../config';
+import { consumeHandoffFragment, devLoginEnabled } from '../lib/codeguru-auth';
 
 const AuthContext = createContext(null);
 
@@ -26,9 +31,9 @@ export function AuthProvider({ children }) {
             const profile = normalizeCodeCoachUser(response.user);
             setUser(profile);
             setAuthSession({
-                accessToken: window.localStorage.getItem('accessToken'),
-                refreshToken: window.localStorage.getItem('refreshToken'),
-                learningSessionId: window.localStorage.getItem('learningSessionId'),
+                accessToken: getAuthToken(),
+                refreshToken: getRefreshToken(),
+                learningSessionId: getRuntimeLearningSessionId(),
                 user: profile
             });
             return profile;
@@ -41,8 +46,26 @@ export function AuthProvider({ children }) {
 
     useEffect(() => {
         const bootstrap = async () => {
+            // Arriving from the Code Guru portal? The tokens are in the URL
+            // fragment. This stores them under the codeguru.* keys this app now
+            // reads, and scrubs them from the address bar so the access token
+            // does not sit in browser history.
+            const adopted = consumeHandoffFragment();
+
             if (isAuthenticated()) {
-                await refreshUser();
+                const profile = await refreshUser();
+
+                // A student handed over from the portal has no gamification
+                // learning session yet - every game submit needs one.
+                if (adopted && profile && !getRuntimeLearningSessionId()) {
+                    try {
+                        const session = await codeCoachApi.createLearningSession();
+                        setAuthSession({ learningSessionId: session.learning_session_id });
+                    } catch {
+                        // Non-fatal: the dashboard still renders, and a session
+                        // is created again on the next sign-in attempt.
+                    }
+                }
             } else {
                 setUser(null);
             }

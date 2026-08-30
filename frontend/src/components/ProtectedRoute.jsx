@@ -10,7 +10,7 @@ export default function ProtectedRoute({ children }) {
     if (loading) {
         return (
             <div style={{ textAlign: 'center', marginTop: '100px' }}>
-                <Activity size={48} color="#60a5fa" style={{ animation: 'spin 2s linear infinite' }} />
+                <Activity size={48} style={{ color: 'var(--cg-accent)', animation: 'spin 2s linear infinite' }} />
                 <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>Checking your session...</p>
             </div>
         );

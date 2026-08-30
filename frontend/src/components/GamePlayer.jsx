@@ -2,7 +2,7 @@ import React, { useEffect, useReducer, useRef, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { codeCoachApi } from '../services/codeCoachApi';
-import { getRuntimeLearningSessionId } from '../config';
+import { formatGameType, getRuntimeLearningSessionId } from '../config';
 import { useAuth } from '../context/AuthContext';
 import { Lightbulb, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 
@@ -53,6 +53,21 @@ const GamePlayer = () => {
     const learningSessionId = getRuntimeLearningSessionId();
     const [state, dispatch] = useReducer(gameReducer, initialState);
     const [submitResult, setSubmitResult] = useState(null);
+
+    // The URL carries whatever Code Coach recommended, in ITS vocabulary
+    // (loop_tracer, condition_debug, bug_hunt). This engine implements three
+    // games - BugHunt, DragDrop, CodeTrace - and the question bank is keyed by
+    // those. The server resolves the two and returns a real question, so the
+    // question's own gameType is the one to render and grade against. Rendering
+    // from the URL param instead meant no instructions appeared and the wrong
+    // interaction was shown.
+    const activeGameType = state.currentQuestion?.gameType || gameType;
+
+    // Same reasoning for difficulty: the URL says 'beginner' (Code Coach's
+    // wording), the question served says 'Easy' (this engine's). Reporting the
+    // URL value recorded a difficulty the student never actually played, which
+    // then fed Code Coach's mastery model.
+    const activeDifficulty = state.currentQuestion?.difficulty || difficulty;
     const adaptationRecorded = useRef(false);
 
     const dragItem = React.useRef();
@@ -99,7 +114,7 @@ const GamePlayer = () => {
                             recommendation_id: recommendation.recommendationId,
                             game_id: recommendation.gameId || res.data.id,
                             game_type: recommendation.gameType || gameType,
-                            difficulty_level: recommendation.difficultyLevel || difficulty,
+                            difficulty_level: activeDifficulty,
                             support_level: recommendation.supportLevel || 'guided',
                             rationale: recommendation.rationale || `Assigned ${gameType} for ${conceptTag}`,
                             based_on_mastery_level: recommendation.basedOnMasteryLevel,
@@ -132,7 +147,7 @@ const GamePlayer = () => {
             const payload = {
                 userId,
                 learningSessionId,
-                gameType,
+                gameType: activeGameType,
                 conceptTag,
                 questionId: state.currentQuestion.id,
                 selectedAnswer: state.selectedAnswer,
@@ -152,8 +167,8 @@ const GamePlayer = () => {
                         concept_tag: conceptTag,
                         recommendation_id: recommendation?.recommendationId,
                         game_id: recommendation?.gameId || state.currentQuestion.id,
-                        game_type: gameType,
-                        difficulty_level: difficulty,
+                        game_type: activeGameType,
+                        difficulty_level: activeDifficulty,
                         support_level: recommendation?.supportLevel || 'guided',
                         score_percent: res.data.score,
                         error_count: res.data.score > 0 ? 0 : 1,
@@ -190,7 +205,7 @@ const GamePlayer = () => {
     if (state.error && !q) {
         return (
             <div className="glass-panel" style={{ maxWidth: '720px', margin: '80px auto', textAlign: 'center', padding: '32px' }}>
-                <AlertCircle size={40} color="#e11d48" style={{ marginBottom: '12px' }} />
+                <AlertCircle size={40} style={{ color: 'var(--cg-danger)', marginBottom: '12px' }} />
                 <h3 style={{ marginTop: 0 }}>{state.error}</h3>
             </div>
         );
@@ -199,7 +214,7 @@ const GamePlayer = () => {
     return (
         <div style={{ maxWidth: '800px', margin: '0 auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <h2>{gameType} <span className="badge badge-medium">{difficulty}</span></h2>
+                <h2>{formatGameType(activeGameType)} <span className="badge badge-medium">{difficulty}</span></h2>
                 <div style={{ display: 'flex', gap: '16px', color: 'var(--text-secondary)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                         <Clock size={18} /> {state.timerSeconds}s
@@ -208,14 +223,14 @@ const GamePlayer = () => {
             </div>
 
             <div className="glass-panel" style={{ marginBottom: '24px' }}>
-                <h3 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px' }}>
-                    {gameType === 'BugHunt' && 'Find the learning issue in this code snippet:'}
-                    {gameType === 'DragDrop' && 'Drag and drop the code blocks into a clear logical order:'}
-                    {gameType === 'CodeTrace' && 'Trace the code and determine the final output:'}
+                <h3 style={{ borderBottom: '1px solid var(--cg-border)', paddingBottom: '12px' }}>
+                    {activeGameType === 'BugHunt' && 'Find the learning issue in this code snippet:'}
+                    {activeGameType === 'DragDrop' && 'Drag and drop the code blocks into a clear logical order:'}
+                    {activeGameType === 'CodeTrace' && 'Trace the code and determine the final output:'}
                 </h3>
 
                 <div className="code-block" style={{ marginTop: '16px' }}>
-                    {gameType === 'BugHunt' && q?.codeLines.map((line, idx) => (
+                    {activeGameType === 'BugHunt' && q?.codeLines.map((line, idx) => (
                         <div
                             key={idx}
                             className={`code-line interactive ${state.selectedAnswer === idx ? 'selected' : ''}`}
@@ -226,7 +241,7 @@ const GamePlayer = () => {
                         </div>
                     ))}
 
-                    {gameType === 'DragDrop' && state.selectedAnswer && Array.isArray(state.selectedAnswer) && state.selectedAnswer.map((originalIndex, index) => (
+                    {activeGameType === 'DragDrop' && state.selectedAnswer && Array.isArray(state.selectedAnswer) && state.selectedAnswer.map((originalIndex, index) => (
                         <div
                             key={index}
                             draggable
@@ -242,7 +257,7 @@ const GamePlayer = () => {
                         </div>
                     ))}
 
-                    {gameType === 'CodeTrace' && (
+                    {activeGameType === 'CodeTrace' && (
                         <>
                             {q?.codeLines.map((line, idx) => (
                                 <div key={idx} className="code-line">
@@ -258,7 +273,7 @@ const GamePlayer = () => {
                                     value={state.selectedAnswer || ''}
                                     onChange={(e) => dispatch({ type: 'SELECT_ANSWER', payload: e.target.value })}
                                     placeholder="Enter expected value..."
-                                    style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#334155', color: '#f8fafc', fontSize: '1rem', flex: 1 }}
+                                    style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'var(--cg-card)', color: 'var(--cg-ink)', fontSize: '1rem', flex: 1 }}
                                 />
                             </div>
                         </>
@@ -296,8 +311,8 @@ const GamePlayer = () => {
             </div>
 
             {submitResult && (
-                <div className={`glass-panel ${submitResult.score > 0 ? '' : 'failed'}`} style={{ marginTop: '24px', backgroundColor: submitResult.score > 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.12)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: submitResult.score > 0 ? 'var(--success-color)' : '#f59e0b' }}>
+                <div className={`glass-panel ${submitResult.score > 0 ? '' : 'failed'}`} style={{ marginTop: '24px', backgroundColor: submitResult.score > 0 ? 'var(--cg-ok-soft)' : 'var(--cg-warn-soft)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: submitResult.score > 0 ? 'var(--success-color)' : 'var(--cg-warn)' }}>
                         {submitResult.score > 0 ? <CheckCircle2 /> : <AlertCircle />}
                         <h3>{submitResult.score > 0 ? `Nice progress! You earned ${submitResult.score} points` : 'Attempt recorded. Let us practice this concept once more.'}</h3>
                     </div>

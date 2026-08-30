@@ -44,6 +44,23 @@ const ERROR_TYPES = [
 
 const DIFFICULTY_LEVELS = ['Easy', 'Medium', 'Hard'];
 
+/**
+ * Code Coach's difficulty vocabulary mapped onto this engine's.
+ *
+ * Code Coach recommends 'beginner' or 'intermediate'; the question bank is
+ * keyed by Easy / Medium / Hard. Without this translation the two never match,
+ * the query silently falls back to "any difficulty", and an engine whose whole
+ * purpose is adaptive difficulty quietly stops adapting.
+ */
+const DIFFICULTY_ALIASES = {
+    beginner: 'Easy',
+    intermediate: 'Medium',
+    advanced: 'Hard',
+    easy: 'Easy',
+    medium: 'Medium',
+    hard: 'Hard'
+};
+
 const DIAGNOSTIC_STATUSES = ['active', 'resolved', 'repeated', 'ignored'];
 const GAME_SESSION_STATUSES = ['started', 'completed', 'abandoned'];
 
@@ -87,6 +104,7 @@ module.exports = {
     CONCEPT_TAGS,
     ERROR_TYPES,
     DIFFICULTY_LEVELS,
+    DIFFICULTY_ALIASES,
     DIAGNOSTIC_STATUSES,
     GAME_SESSION_STATUSES,
     LEARNING_EVENT_TYPES,

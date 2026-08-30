@@ -1,10 +1,22 @@
 export const CONFIG = {
     CODE_COACH_API_URL: import.meta.env.VITE_CODE_COACH_API_URL || '/code-coach-api/api/v1',
-    GAMIFICATION_API_URL: import.meta.env.VITE_GAMIFICATION_API_URL || 'http://localhost:3000/api/v1',
-    AUTH_TOKEN_STORAGE_KEY: 'accessToken',
-    REFRESH_TOKEN_STORAGE_KEY: 'refreshToken',
-    LEARNING_SESSION_STORAGE_KEY: 'learningSessionId',
-    USER_PROFILE_STORAGE_KEY: 'userProfile',
+    // 3002, not 3000 - PairPath's frontend owns 3000 and its API owns 3001.
+    GAMIFICATION_API_URL: import.meta.env.VITE_GAMIFICATION_API_URL || 'http://localhost:3002/api/v1',
+
+    // The shared Code Guru portal, and the flag that allows the localhost-only
+    // login form instead of redirecting to it.
+    PORTAL_URL: import.meta.env.VITE_PORTAL_URL || 'http://localhost:4200',
+    DEV_LOGIN_FLAG: import.meta.env.VITE_ENABLE_DEV_LOGIN,
+
+    // The `codeguru.` prefix is the platform's shared storage namespace, not a
+    // local choice. The portal hands a session over by writing these exact keys
+    // (see lib/codeguru-auth.js consumeHandoffFragment), so reading them here is
+    // what lets a student arrive already signed in. They were 'accessToken' and
+    // 'refreshToken', which the handoff would have written straight past.
+    AUTH_TOKEN_STORAGE_KEY: 'codeguru.accessToken',
+    REFRESH_TOKEN_STORAGE_KEY: 'codeguru.refreshToken',
+    LEARNING_SESSION_STORAGE_KEY: 'codeguru.learningSessionId',
+    USER_PROFILE_STORAGE_KEY: 'codeguru.user',
     CLIENT_NAME: 'code-guru-gamification'
 };
 
@@ -106,6 +118,30 @@ export function getRuntimeUser() {
 
 export function isAuthenticated() {
     return Boolean(getAuthToken() && getRuntimeUserId());
+}
+
+/**
+ * Human-readable name for a game type.
+ *
+ * Two vocabularies reach the UI: Code Coach recommends a kind of practice
+ * (bug_hunt, loop_tracer, condition_debug, debug_challenge) and this engine
+ * implements three games (BugHunt, DragDrop, CodeTrace). Either can arrive
+ * here, and neither should be shown to a student raw - "Start loop_tracer
+ * Practice" is an internal identifier leaking onto a button.
+ */
+const GAME_TYPE_LABELS = {
+    bug_hunt: 'Bug Hunt',
+    loop_tracer: 'Loop Trace',
+    condition_debug: 'Condition Debug',
+    debug_challenge: 'Debug Challenge',
+    BugHunt: 'Bug Hunt',
+    DragDrop: 'Code Ordering',
+    CodeTrace: 'Code Trace'
+};
+
+export function formatGameType(gameType) {
+    if (!gameType) return 'Practice';
+    return GAME_TYPE_LABELS[gameType] || String(gameType).replace(/_/g, ' ');
 }
 
 export function mapStruggleLevelToBadge(struggleLevel) {
