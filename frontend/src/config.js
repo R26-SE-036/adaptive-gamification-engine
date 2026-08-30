@@ -120,6 +120,30 @@ export function isAuthenticated() {
     return Boolean(getAuthToken() && getRuntimeUserId());
 }
 
+/**
+ * Human-readable name for a game type.
+ *
+ * Two vocabularies reach the UI: Code Coach recommends a kind of practice
+ * (bug_hunt, loop_tracer, condition_debug, debug_challenge) and this engine
+ * implements three games (BugHunt, DragDrop, CodeTrace). Either can arrive
+ * here, and neither should be shown to a student raw - "Start loop_tracer
+ * Practice" is an internal identifier leaking onto a button.
+ */
+const GAME_TYPE_LABELS = {
+    bug_hunt: 'Bug Hunt',
+    loop_tracer: 'Loop Trace',
+    condition_debug: 'Condition Debug',
+    debug_challenge: 'Debug Challenge',
+    BugHunt: 'Bug Hunt',
+    DragDrop: 'Code Ordering',
+    CodeTrace: 'Code Trace'
+};
+
+export function formatGameType(gameType) {
+    if (!gameType) return 'Practice';
+    return GAME_TYPE_LABELS[gameType] || String(gameType).replace(/_/g, ' ');
+}
+
 export function mapStruggleLevelToBadge(struggleLevel) {
     const level = String(struggleLevel || '').toLowerCase();
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { apiService } from '../services/api';
 import { codeCoachApi } from '../services/codeCoachApi';
+import { formatGameType } from '../config';
 import { useAuth } from '../context/AuthContext';
 import { formatApiError, mapStruggleLevelToBadge } from '../config';
 import { Activity, Target, BrainCircuit, PlayCircle, Flame, Award, AlertTriangle } from 'lucide-react';
@@ -186,7 +187,7 @@ const Dashboard = () => {
 
                     <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.08)', marginBottom: '16px', borderLeft: '4px solid #3b82f6' }}>
                         <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Assigned Game Type:</span>
-                        <h4 style={{ margin: '4px 0 0 0', color: '#1e40af', fontSize: '1.1rem' }}>{recommendation.gameType}</h4>
+                        <h4 style={{ margin: '4px 0 0 0', color: '#1e40af', fontSize: '1.1rem' }}>{formatGameType(recommendation.gameType)}</h4>
                         <p style={{ margin: '8px 0 0 0', color: 'var(--text-secondary)', fontSize: '0.95rem' }}>{recommendation.rationale}</p>
                     </div>
 
@@ -207,7 +208,7 @@ const Dashboard = () => {
                         )}
                     >
                         <PlayCircle size={22} />
-                        Start {recommendation.gameType} Practice
+                        Start {formatGameType(recommendation.gameType)} Practice
                     </button>
                 </div>
             ) : (
