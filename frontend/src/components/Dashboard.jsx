@@ -133,7 +133,7 @@ const Dashboard = () => {
 
             <h2>Personalized Learning Dashboard</h2>
             <p style={{ color: 'var(--text-secondary)', marginBottom: '32px' }}>
-                Live recommendations from Code Coach based on your real diagnostic history in MongoDB Atlas.
+                Live recommendations from Code Coach, based on the mistakes it saw you repeat while coding.
             </p>
 
             {loadError && (
