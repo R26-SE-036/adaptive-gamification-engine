@@ -205,7 +205,7 @@ const GamePlayer = () => {
     if (state.error && !q) {
         return (
             <div className="glass-panel" style={{ maxWidth: '720px', margin: '80px auto', textAlign: 'center', padding: '32px' }}>
-                <AlertCircle size={40} color="#e11d48" style={{ marginBottom: '12px' }} />
+                <AlertCircle size={40} style={{ color: 'var(--cg-danger)', marginBottom: '12px' }} />
                 <h3 style={{ marginTop: 0 }}>{state.error}</h3>
             </div>
         );
@@ -223,7 +223,7 @@ const GamePlayer = () => {
             </div>
 
             <div className="glass-panel" style={{ marginBottom: '24px' }}>
-                <h3 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px' }}>
+                <h3 style={{ borderBottom: '1px solid var(--cg-border)', paddingBottom: '12px' }}>
                     {activeGameType === 'BugHunt' && 'Find the learning issue in this code snippet:'}
                     {activeGameType === 'DragDrop' && 'Drag and drop the code blocks into a clear logical order:'}
                     {activeGameType === 'CodeTrace' && 'Trace the code and determine the final output:'}
@@ -273,7 +273,7 @@ const GamePlayer = () => {
                                     value={state.selectedAnswer || ''}
                                     onChange={(e) => dispatch({ type: 'SELECT_ANSWER', payload: e.target.value })}
                                     placeholder="Enter expected value..."
-                                    style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#334155', color: '#f8fafc', fontSize: '1rem', flex: 1 }}
+                                    style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: 'var(--cg-card)', color: 'var(--cg-ink)', fontSize: '1rem', flex: 1 }}
                                 />
                             </div>
                         </>
@@ -311,8 +311,8 @@ const GamePlayer = () => {
             </div>
 
             {submitResult && (
-                <div className={`glass-panel ${submitResult.score > 0 ? '' : 'failed'}`} style={{ marginTop: '24px', backgroundColor: submitResult.score > 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.12)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: submitResult.score > 0 ? 'var(--success-color)' : '#f59e0b' }}>
+                <div className={`glass-panel ${submitResult.score > 0 ? '' : 'failed'}`} style={{ marginTop: '24px', backgroundColor: submitResult.score > 0 ? 'var(--cg-ok-soft)' : 'var(--cg-warn-soft)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: submitResult.score > 0 ? 'var(--success-color)' : 'var(--cg-warn)' }}>
                         {submitResult.score > 0 ? <CheckCircle2 /> : <AlertCircle />}
                         <h3>{submitResult.score > 0 ? `Nice progress! You earned ${submitResult.score} points` : 'Attempt recorded. Let us practice this concept once more.'}</h3>
                     </div>

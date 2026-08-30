@@ -46,9 +46,9 @@ export default function Login() {
     if (!localLoginAllowed) {
         return (
             <div style={{ maxWidth: '480px', margin: '80px auto', textAlign: 'center' }}>
-                <Layers size={40} color="#60a5fa" />
+                <Layers size={40} style={{ color: 'var(--cg-accent)' }} />
                 <h2 style={{ marginTop: '16px' }}>Code Guru</h2>
-                <p style={{ color: '#94a3b8' }}>Taking you to the Code Guru sign-in...</p>
+                <p style={{ color: 'var(--cg-muted)' }}>Taking you to the Code Guru sign-in...</p>
             </div>
         );
     }
@@ -72,7 +72,7 @@ export default function Login() {
         <div style={{ maxWidth: '480px', margin: '60px auto' }}>
             <div style={{ textAlign: 'center', marginBottom: '32px' }}>
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
-                    <Layers size={48} color="#8b5cf6" />
+                    <Layers size={48} style={{ color: 'var(--cg-accent)' }} />
                 </div>
                 <h2 style={{ marginBottom: '8px' }}>Sign in to Code Guru</h2>
                 <p style={{ color: 'var(--text-secondary)' }}>

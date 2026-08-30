@@ -82,7 +82,7 @@ const Dashboard = () => {
     if (loading) {
         return (
             <div style={{ textAlign: 'center', marginTop: '100px' }}>
-                <Activity size={48} color="#60a5fa" style={{ animation: 'spin 2s linear infinite' }} />
+                <Activity size={48} style={{ color: 'var(--cg-accent)', animation: 'spin 2s linear infinite' }} />
                 <p style={{ marginTop: '16px', color: 'var(--text-secondary)' }}>
                     Loading real Code Coach struggle signals for {user?.fullName || user?.email}...
                 </p>
@@ -106,8 +106,8 @@ const Dashboard = () => {
 
                     <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#ef4444', fontWeight: 'bold', fontSize: '1.25rem' }}>
-                                <Flame size={24} fill={profile.currentStreak > 0 ? '#ef4444' : 'none'} />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--cg-danger)', fontWeight: 'bold', fontSize: '1.25rem' }}>
+                                <Flame size={24} fill={profile.currentStreak > 0 ? 'currentColor' : 'none'} />
                                 {profile.currentStreak || 0}
                             </div>
                             <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Day Streak</span>
@@ -116,9 +116,9 @@ const Dashboard = () => {
                         <div style={{ display: 'flex', gap: '8px' }}>
                             {profile.badges && profile.badges.length > 0 ? (
                                 profile.badges.map((badge, idx) => (
-                                    <div key={idx} style={{ padding: '8px 12px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
-                                        <Award size={16} color="#f59e0b" />
-                                        <span style={{ fontSize: '0.85rem', color: '#fcd34d', fontWeight: '500' }}>{badge}</span>
+                                    <div key={idx} style={{ padding: '8px 12px', background: 'rgb(var(--cg-rgb-warn) / 0.1)', borderRadius: '12px', display: 'flex', alignItems: 'center', gap: '6px', border: '1px solid rgb(var(--cg-rgb-warn) / 0.2)' }}>
+                                        <Award size={16} style={{ color: 'var(--cg-warn)' }} />
+                                        <span style={{ fontSize: '0.85rem', color: 'var(--cg-warn)', fontWeight: '500' }}>{badge}</span>
                                     </div>
                                 ))
                             ) : (
@@ -144,10 +144,10 @@ const Dashboard = () => {
             )}
 
             {recommendation ? (
-                <div className="glass-panel" style={{ maxWidth: '680px', margin: '0 auto', padding: '32px', border: '2px solid rgba(96, 165, 250, 0.4)', background: 'linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(241, 245, 249, 0.85) 100%)' }}>
+                <div className="glass-panel" style={{ maxWidth: '680px', margin: '0 auto', padding: '32px', border: '2px solid rgb(var(--cg-rgb-accent) / 0.4)', background: 'linear-gradient(135deg, rgb(var(--cg-rgb-card) / 0.85) 0%, rgb(var(--cg-rgb-card-alt) / 0.85) 100%)' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <Target color="#f59e0b" size={28} />
+                            <Target size={28} style={{ color: 'var(--cg-warn)' }} />
                             <h3 style={{ margin: 0, fontSize: '1.4rem' }}>{recommendation.title}</h3>
                         </div>
                         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -180,14 +180,14 @@ const Dashboard = () => {
                     </div>
 
                     <p style={{ color: 'var(--text-secondary)', fontSize: '1.05rem', marginBottom: '16px' }}>
-                        <BrainCircuit size={18} style={{ verticalAlign: 'middle', marginRight: '8px', color: '#3b82f6' }} />
+                        <BrainCircuit size={18} style={{ verticalAlign: 'middle', marginRight: '8px', color: 'var(--cg-accent)' }} />
                         Concept: <strong>{recommendation.conceptTag.replace(/_/g, ' ')}</strong>
                         {recommendation.errorType ? <> · Error: <strong>{recommendation.errorType}</strong></> : null}
                     </p>
 
-                    <div style={{ padding: '16px', borderRadius: '12px', background: 'rgba(59, 130, 246, 0.08)', marginBottom: '16px', borderLeft: '4px solid #3b82f6' }}>
+                    <div style={{ padding: '16px', borderRadius: '12px', background: 'rgb(var(--cg-rgb-accent) / 0.08)', marginBottom: '16px', borderLeft: '4px solid #3b82f6' }}>
                         <span style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Assigned Game Type:</span>
-                        <h4 style={{ margin: '4px 0 0 0', color: '#1e40af', fontSize: '1.1rem' }}>{formatGameType(recommendation.gameType)}</h4>
+                        <h4 style={{ margin: '4px 0 0 0', color: 'var(--cg-accent-strong)', fontSize: '1.1rem' }}>{formatGameType(recommendation.gameType)}</h4>
                         <p style={{ margin: '8px 0 0 0', color: 'var(--text-secondary)', fontSize: '0.95rem' }}>{recommendation.rationale}</p>
                     </div>
 
