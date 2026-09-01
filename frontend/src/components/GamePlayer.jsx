@@ -1,7 +1,9 @@
-import React, { useEffect, useReducer, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useReducer, useRef, useState } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { apiService } from '../services/api';
-import { CONFIG } from '../config';
+import { codeCoachApi } from '../services/codeCoachApi';
+import { getRuntimeLearningSessionId } from '../config';
+import { useAuth } from '../context/AuthContext';
 import { Lightbulb, Clock, CheckCircle2, AlertCircle } from 'lucide-react';
 
 const initialState = {
@@ -10,54 +12,126 @@ const initialState = {
     hintLevel: 0,
     attemptCount: 1,
     timerSeconds: 0,
-    gamePhase: 'loading', // loading, playing, submitted
+    gamePhase: 'loading',
     error: null
 };
 
 function gameReducer(state, action) {
-    switch(action.type) {
-        case 'INIT': return { ...state, currentQuestion: action.payload, gamePhase: 'playing', error: null };
-        case 'SELECT_ANSWER': return { ...state, selectedAnswer: action.payload };
-        case 'USE_HINT': return { ...state, hintLevel: Math.min(state.hintLevel + 1, 3) };
-        case 'ADD_ATTEMPT': return { ...state, attemptCount: state.attemptCount + 1 };
-        case 'TICK': return { ...state, timerSeconds: state.timerSeconds + 1 };
-        case 'SUBMIT': return { ...state, gamePhase: 'submitted' };
-        case 'ERROR': return { ...state, error: action.payload, gamePhase: 'playing' };
-        default: return state;
+    switch (action.type) {
+        case 'INIT': {
+            let initialAnswer = null;
+            if (action.payload.gameType === 'DragDrop') {
+                initialAnswer = action.payload.codeLines.map((_, i) => i);
+            } else if (action.payload.gameType === 'CodeTrace') {
+                initialAnswer = '';
+            }
+            return { ...state, currentQuestion: action.payload, selectedAnswer: initialAnswer, gamePhase: 'playing', error: null };
+        }
+        case 'SELECT_ANSWER':
+            return { ...state, selectedAnswer: action.payload };
+        case 'USE_HINT':
+            return { ...state, hintLevel: Math.min(state.hintLevel + 1, 3) };
+        case 'ADD_ATTEMPT':
+            return { ...state, attemptCount: state.attemptCount + 1 };
+        case 'TICK':
+            return { ...state, timerSeconds: state.timerSeconds + 1 };
+        case 'SUBMIT':
+            return { ...state, gamePhase: 'submitted' };
+        case 'ERROR':
+            return { ...state, error: action.payload, gamePhase: 'playing' };
+        default:
+            return state;
     }
 }
 
 const GamePlayer = () => {
     const { gameType, conceptTag, difficulty } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
+    const recommendation = location.state?.recommendation;
+    const { userId } = useAuth();
+    const learningSessionId = getRuntimeLearningSessionId();
     const [state, dispatch] = useReducer(gameReducer, initialState);
     const [submitResult, setSubmitResult] = useState(null);
+    const adaptationRecorded = useRef(false);
+
+    const dragItem = React.useRef();
+    const dragOverItem = React.useRef();
+
+    const dragStart = (e, position) => {
+        dragItem.current = position;
+    };
+
+    const dragEnter = (e, position) => {
+        dragOverItem.current = position;
+    };
+
+    const drop = () => {
+        const copyListItems = [...state.selectedAnswer];
+        const dragItemContent = copyListItems[dragItem.current];
+        copyListItems.splice(dragItem.current, 1);
+        copyListItems.splice(dragOverItem.current, 0, dragItemContent);
+        dragItem.current = null;
+        dragOverItem.current = null;
+        dispatch({ type: 'SELECT_ANSWER', payload: copyListItems });
+    };
 
     useEffect(() => {
+        if (!userId) {
+            dispatch({ type: 'ERROR', payload: 'Authentication required' });
+            return;
+        }
+
         let isMounted = true;
-        apiService.getGame(CONFIG.MOCK_USER_ID, gameType, conceptTag, difficulty)
-            .then(res => {
-                if(isMounted) dispatch({ type: 'INIT', payload: res.data });
+
+        apiService.getGame(userId, gameType, conceptTag, difficulty)
+            .then(async (res) => {
+                if (!isMounted) return;
+
+                dispatch({ type: 'INIT', payload: res.data });
+
+                if (recommendation && learningSessionId && !adaptationRecorded.current) {
+                    adaptationRecorded.current = true;
+                    try {
+                        await codeCoachApi.recordAdaptationDecision({
+                            learningSessionId,
+                            concept_tag: recommendation.conceptTag,
+                            recommendation_id: recommendation.recommendationId,
+                            game_id: recommendation.gameId || res.data.id,
+                            game_type: recommendation.gameType || gameType,
+                            difficulty_level: recommendation.difficultyLevel || difficulty,
+                            support_level: recommendation.supportLevel || 'guided',
+                            rationale: recommendation.rationale || `Assigned ${gameType} for ${conceptTag}`,
+                            based_on_mastery_level: recommendation.basedOnMasteryLevel,
+                            based_on_struggle_level: recommendation.struggleLevel || recommendation.basedOnStruggleLevel
+                        });
+                    } catch (err) {
+                        console.warn('Could not record adaptation decision:', err);
+                    }
+                }
             })
-            .catch(err => {
-                if(isMounted) dispatch({ type: 'ERROR', payload: "Failed to load game" });
+            .catch(() => {
+                if (isMounted) {
+                    dispatch({ type: 'ERROR', payload: 'We could not load your practice activity. Please try again.' });
+                }
             });
+
         return () => { isMounted = false; };
-    }, [gameType, conceptTag, difficulty]);
+    }, [userId, gameType, conceptTag, difficulty, recommendation, learningSessionId]);
 
     useEffect(() => {
-        if(state.gamePhase !== 'playing') return;
+        if (state.gamePhase !== 'playing') return;
         const timer = setInterval(() => dispatch({ type: 'TICK' }), 1000);
         return () => clearInterval(timer);
     }, [state.gamePhase]);
 
     const handleSubmit = async () => {
         if (state.selectedAnswer === null) return;
-        
+
         try {
             const payload = {
-                userId: CONFIG.MOCK_USER_ID,
-                learningSessionId: CONFIG.MOCK_LEARNING_SESSION_ID,
+                userId,
+                learningSessionId,
                 gameType,
                 conceptTag,
                 questionId: state.currentQuestion.id,
@@ -66,24 +140,61 @@ const GamePlayer = () => {
                 timeTakenSeconds: state.timerSeconds,
                 attemptCount: state.attemptCount
             };
-            
+
             const res = await apiService.submitGame(payload);
             setSubmitResult(res.data);
             dispatch({ type: 'SUBMIT' });
 
-            // Automatically navigate to results after short delay
-            setTimeout(() => {
-                navigate('/results', { state: { result: res.data, conceptTag, attemptCount: state.attemptCount, hintLevel: state.hintLevel, time: state.timerSeconds } });
-            }, 3000);
+            if (learningSessionId) {
+                try {
+                    await codeCoachApi.recordSessionResult({
+                        learningSessionId,
+                        concept_tag: conceptTag,
+                        recommendation_id: recommendation?.recommendationId,
+                        game_id: recommendation?.gameId || state.currentQuestion.id,
+                        game_type: gameType,
+                        difficulty_level: difficulty,
+                        support_level: recommendation?.supportLevel || 'guided',
+                        score_percent: res.data.score,
+                        error_count: res.data.score > 0 ? 0 : 1,
+                        attempt_count: state.attemptCount,
+                        hint_usage: state.hintLevel,
+                        time_taken_seconds: state.timerSeconds,
+                        passed: res.data.score >= 80
+                    });
+                } catch (err) {
+                    console.warn('Could not record session result in Code Coach:', err);
+                }
+            }
 
-        } catch (err) {
-            dispatch({ type: 'ERROR', payload: "Submission failed" });
+            setTimeout(() => {
+                navigate('/results', {
+                    state: {
+                        result: res.data,
+                        conceptTag,
+                        attemptCount: state.attemptCount,
+                        hintLevel: state.hintLevel,
+                        time: state.timerSeconds
+                    }
+                });
+            }, 3000);
+        } catch {
+            dispatch({ type: 'ERROR', payload: 'We could not save this attempt. Please try once more.' });
         }
     };
 
     if (state.gamePhase === 'loading') return <div>Loading your targeted practice...</div>;
-    
+
     const q = state.currentQuestion;
+
+    if (state.error && !q) {
+        return (
+            <div className="glass-panel" style={{ maxWidth: '720px', margin: '80px auto', textAlign: 'center', padding: '32px' }}>
+                <AlertCircle size={40} color="#e11d48" style={{ marginBottom: '12px' }} />
+                <h3 style={{ marginTop: 0 }}>{state.error}</h3>
+            </div>
+        );
+    }
 
     return (
         <div style={{ maxWidth: '800px', margin: '0 auto' }}>
@@ -98,13 +209,15 @@ const GamePlayer = () => {
 
             <div className="glass-panel" style={{ marginBottom: '24px' }}>
                 <h3 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '12px' }}>
-                    Find the bug in this code snippet:
+                    {gameType === 'BugHunt' && 'Find the learning issue in this code snippet:'}
+                    {gameType === 'DragDrop' && 'Drag and drop the code blocks into a clear logical order:'}
+                    {gameType === 'CodeTrace' && 'Trace the code and determine the final output:'}
                 </h3>
-                
+
                 <div className="code-block" style={{ marginTop: '16px' }}>
-                    {q?.codeLines.map((line, idx) => (
-                        <div 
-                            key={idx} 
+                    {gameType === 'BugHunt' && q?.codeLines.map((line, idx) => (
+                        <div
+                            key={idx}
                             className={`code-line interactive ${state.selectedAnswer === idx ? 'selected' : ''}`}
                             onClick={() => dispatch({ type: 'SELECT_ANSWER', payload: idx })}
                         >
@@ -112,6 +225,44 @@ const GamePlayer = () => {
                             {line}
                         </div>
                     ))}
+
+                    {gameType === 'DragDrop' && state.selectedAnswer && Array.isArray(state.selectedAnswer) && state.selectedAnswer.map((originalIndex, index) => (
+                        <div
+                            key={index}
+                            draggable
+                            onDragStart={(e) => dragStart(e, index)}
+                            onDragEnter={(e) => dragEnter(e, index)}
+                            onDragEnd={drop}
+                            onDragOver={(e) => e.preventDefault()}
+                            className="code-line interactive draggable"
+                            style={{ cursor: 'grab' }}
+                        >
+                            <span style={{ opacity: 0.5, marginRight: '16px', userSelect: 'none' }}>::</span>
+                            {q.codeLines[originalIndex]}
+                        </div>
+                    ))}
+
+                    {gameType === 'CodeTrace' && (
+                        <>
+                            {q?.codeLines.map((line, idx) => (
+                                <div key={idx} className="code-line">
+                                    <span style={{ opacity: 0.5, marginRight: '16px', userSelect: 'none' }}>{idx + 1}</span>
+                                    {line}
+                                </div>
+                            ))}
+                            <div style={{ marginTop: '24px', display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                <span style={{ fontWeight: 'bold' }}>Final Output:</span>
+                                <input
+                                    type="text"
+                                    className="trace-input"
+                                    value={state.selectedAnswer || ''}
+                                    onChange={(e) => dispatch({ type: 'SELECT_ANSWER', payload: e.target.value })}
+                                    placeholder="Enter expected value..."
+                                    style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#334155', color: '#f8fafc', fontSize: '1rem', flex: 1 }}
+                                />
+                            </div>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -123,34 +274,34 @@ const GamePlayer = () => {
             )}
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <button 
-                    className="btn btn-secondary" 
+                <button
+                    className="btn btn-secondary"
                     onClick={() => dispatch({ type: 'USE_HINT' })}
                     disabled={state.hintLevel >= 3 || state.gamePhase !== 'playing'}
                 >
-                    <Lightbulb size={18} style={{ verticalAlign: 'middle', marginRight: '6px' }}/>
-                    Use Hint (-15 pts)
+                    <Lightbulb size={18} style={{ verticalAlign: 'middle', marginRight: '6px' }} />
+                    Use Hint (-15 points)
                 </button>
 
                 <div style={{ display: 'flex', gap: '12px' }}>
                     <span style={{ padding: '10px', color: 'var(--text-secondary)' }}>Attempt {state.attemptCount}</span>
-                    <button 
-                        className="btn" 
+                    <button
+                        className="btn"
                         onClick={handleSubmit}
                         disabled={state.selectedAnswer === null || state.gamePhase !== 'playing'}
                     >
-                        Submit Answer
+                        Submit Attempt
                     </button>
                 </div>
             </div>
 
             {submitResult && (
-                <div className={`glass-panel ${submitResult.score > 0 ? '' : 'failed'}`} style={{ marginTop: '24px', backgroundColor: submitResult.score > 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: submitResult.score > 0 ? 'var(--success-color)' : 'var(--danger-color)' }}>
+                <div className={`glass-panel ${submitResult.score > 0 ? '' : 'failed'}`} style={{ marginTop: '24px', backgroundColor: submitResult.score > 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.12)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: submitResult.score > 0 ? 'var(--success-color)' : '#f59e0b' }}>
                         {submitResult.score > 0 ? <CheckCircle2 /> : <AlertCircle />}
-                        <h3>{submitResult.score > 0 ? `Correct! You scored ${submitResult.score} pts` : `Incorrect. Score: 0`}</h3>
+                        <h3>{submitResult.score > 0 ? `Nice progress! You earned ${submitResult.score} points` : 'Attempt recorded. Let us practice this concept once more.'}</h3>
                     </div>
-                    <p style={{ marginTop: '8px' }}>{submitResult.explanation}</p>
+                    <p style={{ marginTop: '8px' }}>{submitResult.learnerFeedback || submitResult.explanation}</p>
                     <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginTop: '8px' }}>Navigating to results...</p>
                 </div>
             )}

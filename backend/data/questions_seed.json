@@ -1,0 +1,1261 @@
+[
+    {
+        "id": "q001",
+        "errorType": "OFF_BY_ONE_LOOP_BOUNDARY",
+        "conceptTag": "loop_boundaries",
+        "difficulty": "Easy",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] data = {1, 2, 3, 4, 1};",
+            "        int sum = 0;",
+            "        for (int i = 0; i <= data.length; i++) {",
+            "            sum += data[i];",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 4,
+        "correctAnswer": 4,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "Using <= data.length causes the loop to access an index out of bounds. Use < data.length instead."
+    },
+    {
+        "id": "q002",
+        "errorType": "OFF_BY_ONE_LOOP_BOUNDARY",
+        "conceptTag": "loop_boundaries",
+        "difficulty": "Easy",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        String[] names = {\"Alice\", \"Bob\", \"Charlie2\"};",
+            "        for(int j = 1; j <= names.length; ++j) {",
+            "            System.out.println(names[j]);",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "Valid array indices go up to length - 1. Loop should run while j < names.length."
+    },
+    {
+        "id": "q003",
+        "errorType": "OFF_BY_ONE_LOOP_BOUNDARY",
+        "conceptTag": "loop_boundaries",
+        "difficulty": "Easy",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] data = {1, 2, 3, 4, 3};",
+            "        int sum = 0;",
+            "        for (int i = 0; i <= data.length; i++) {",
+            "            sum += data[i];",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 4,
+        "correctAnswer": 4,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "Using <= data.length causes the loop to access an index out of bounds. Use < data.length instead."
+    },
+    {
+        "id": "q004",
+        "errorType": "OFF_BY_ONE_LOOP_BOUNDARY",
+        "conceptTag": "loop_boundaries",
+        "difficulty": "Easy",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        String[] names = {\"Alice\", \"Bob\", \"Charlie4\"};",
+            "        for(int j = 1; j <= names.length; ++j) {",
+            "            System.out.println(names[j]);",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "Valid array indices go up to length - 1. Loop should run while j < names.length."
+    },
+    {
+        "id": "q005",
+        "errorType": "OFF_BY_ONE_LOOP_BOUNDARY",
+        "conceptTag": "loop_boundaries",
+        "difficulty": "Easy",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] data = {1, 2, 3, 4, 5};",
+            "        int sum = 0;",
+            "        for (int i = 0; i <= data.length; i++) {",
+            "            sum += data[i];",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 4,
+        "correctAnswer": 4,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "Using <= data.length causes the loop to access an index out of bounds. Use < data.length instead."
+    },
+    {
+        "id": "q006",
+        "errorType": "OFF_BY_ONE_LOOP_BOUNDARY",
+        "conceptTag": "loop_boundaries",
+        "difficulty": "Medium",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] data = {1, 2, 3, 4, 6};",
+            "        int sum = 0;",
+            "        for (int i = 0; i <= data.length; i++) {",
+            "            sum += data[i];",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 4,
+        "correctAnswer": 4,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "Using <= data.length causes the loop to access an index out of bounds. Use < data.length instead."
+    },
+    {
+        "id": "q007",
+        "errorType": "OFF_BY_ONE_LOOP_BOUNDARY",
+        "conceptTag": "loop_boundaries",
+        "difficulty": "Medium",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        String[] names = {\"Alice\", \"Bob\", \"Charlie7\"};",
+            "        for(int j = 1; j <= names.length; ++j) {",
+            "            System.out.println(names[j]);",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "Valid array indices go up to length - 1. Loop should run while j < names.length."
+    },
+    {
+        "id": "q008",
+        "errorType": "OFF_BY_ONE_LOOP_BOUNDARY",
+        "conceptTag": "loop_boundaries",
+        "difficulty": "Medium",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] data = {1, 2, 3, 4, 8};",
+            "        int sum = 0;",
+            "        for (int i = 0; i <= data.length; i++) {",
+            "            sum += data[i];",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 4,
+        "correctAnswer": 4,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "Using <= data.length causes the loop to access an index out of bounds. Use < data.length instead."
+    },
+    {
+        "id": "q009",
+        "errorType": "OFF_BY_ONE_LOOP_BOUNDARY",
+        "conceptTag": "loop_boundaries",
+        "difficulty": "Medium",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        String[] names = {\"Alice\", \"Bob\", \"Charlie9\"};",
+            "        for(int j = 1; j <= names.length; ++j) {",
+            "            System.out.println(names[j]);",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "Valid array indices go up to length - 1. Loop should run while j < names.length."
+    },
+    {
+        "id": "q010",
+        "errorType": "OFF_BY_ONE_LOOP_BOUNDARY",
+        "conceptTag": "loop_boundaries",
+        "difficulty": "Medium",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] data = {1, 2, 3, 4, 10};",
+            "        int sum = 0;",
+            "        for (int i = 0; i <= data.length; i++) {",
+            "            sum += data[i];",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 4,
+        "correctAnswer": 4,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "Using <= data.length causes the loop to access an index out of bounds. Use < data.length instead."
+    },
+    {
+        "id": "q011",
+        "errorType": "OFF_BY_ONE_LOOP_BOUNDARY",
+        "conceptTag": "loop_boundaries",
+        "difficulty": "Hard",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] data = {1, 2, 3, 4, 11};",
+            "        int sum = 0;",
+            "        for (int i = 0; i <= data.length; i++) {",
+            "            sum += data[i];",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 4,
+        "correctAnswer": 4,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "Using <= data.length causes the loop to access an index out of bounds. Use < data.length instead."
+    },
+    {
+        "id": "q012",
+        "errorType": "OFF_BY_ONE_LOOP_BOUNDARY",
+        "conceptTag": "loop_boundaries",
+        "difficulty": "Hard",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        String[] names = {\"Alice\", \"Bob\", \"Charlie12\"};",
+            "        for(int j = 1; j <= names.length; ++j) {",
+            "            System.out.println(names[j]);",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "Valid array indices go up to length - 1. Loop should run while j < names.length."
+    },
+    {
+        "id": "q013",
+        "errorType": "OFF_BY_ONE_LOOP_BOUNDARY",
+        "conceptTag": "loop_boundaries",
+        "difficulty": "Hard",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] data = {1, 2, 3, 4, 13};",
+            "        int sum = 0;",
+            "        for (int i = 0; i <= data.length; i++) {",
+            "            sum += data[i];",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 4,
+        "correctAnswer": 4,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "Using <= data.length causes the loop to access an index out of bounds. Use < data.length instead."
+    },
+    {
+        "id": "q014",
+        "errorType": "OFF_BY_ONE_LOOP_BOUNDARY",
+        "conceptTag": "loop_boundaries",
+        "difficulty": "Hard",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        String[] names = {\"Alice\", \"Bob\", \"Charlie14\"};",
+            "        for(int j = 1; j <= names.length; ++j) {",
+            "            System.out.println(names[j]);",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "Valid array indices go up to length - 1. Loop should run while j < names.length."
+    },
+    {
+        "id": "q015",
+        "errorType": "OFF_BY_ONE_LOOP_BOUNDARY",
+        "conceptTag": "loop_boundaries",
+        "difficulty": "Hard",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] data = {1, 2, 3, 4, 15};",
+            "        int sum = 0;",
+            "        for (int i = 0; i <= data.length; i++) {",
+            "            sum += data[i];",
+            "        }",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 4,
+        "correctAnswer": 4,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "Using <= data.length causes the loop to access an index out of bounds. Use < data.length instead."
+    },
+    {
+        "id": "q016",
+        "errorType": "ARRAY_LENGTH_INDEX_MISUSE",
+        "conceptTag": "array_indexing",
+        "difficulty": "Easy",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] nums = {5, 10, 15, 2016};",
+            "        int lastValue = nums[nums.length];",
+            "        System.out.println(lastValue);",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "nums.length gives the total count. The last element is at nums.length - 1."
+    },
+    {
+        "id": "q017",
+        "errorType": "ARRAY_LENGTH_INDEX_MISUSE",
+        "conceptTag": "array_indexing",
+        "difficulty": "Easy",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        char[] letters = {'A', 'B', 'C17'};",
+            "        char c = letters[letters.length];",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "The maximum index of an array is its length minus one."
+    },
+    {
+        "id": "q018",
+        "errorType": "ARRAY_LENGTH_INDEX_MISUSE",
+        "conceptTag": "array_indexing",
+        "difficulty": "Easy",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] nums = {5, 10, 15, 2018};",
+            "        int lastValue = nums[nums.length];",
+            "        System.out.println(lastValue);",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "nums.length gives the total count. The last element is at nums.length - 1."
+    },
+    {
+        "id": "q019",
+        "errorType": "ARRAY_LENGTH_INDEX_MISUSE",
+        "conceptTag": "array_indexing",
+        "difficulty": "Easy",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        char[] letters = {'A', 'B', 'C19'};",
+            "        char c = letters[letters.length];",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "The maximum index of an array is its length minus one."
+    },
+    {
+        "id": "q020",
+        "errorType": "ARRAY_LENGTH_INDEX_MISUSE",
+        "conceptTag": "array_indexing",
+        "difficulty": "Easy",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] nums = {5, 10, 15, 2020};",
+            "        int lastValue = nums[nums.length];",
+            "        System.out.println(lastValue);",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "nums.length gives the total count. The last element is at nums.length - 1."
+    },
+    {
+        "id": "q021",
+        "errorType": "ARRAY_LENGTH_INDEX_MISUSE",
+        "conceptTag": "array_indexing",
+        "difficulty": "Medium",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] nums = {5, 10, 15, 2021};",
+            "        int lastValue = nums[nums.length];",
+            "        System.out.println(lastValue);",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "nums.length gives the total count. The last element is at nums.length - 1."
+    },
+    {
+        "id": "q022",
+        "errorType": "ARRAY_LENGTH_INDEX_MISUSE",
+        "conceptTag": "array_indexing",
+        "difficulty": "Medium",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        char[] letters = {'A', 'B', 'C22'};",
+            "        char c = letters[letters.length];",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "The maximum index of an array is its length minus one."
+    },
+    {
+        "id": "q023",
+        "errorType": "ARRAY_LENGTH_INDEX_MISUSE",
+        "conceptTag": "array_indexing",
+        "difficulty": "Medium",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] nums = {5, 10, 15, 2023};",
+            "        int lastValue = nums[nums.length];",
+            "        System.out.println(lastValue);",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "nums.length gives the total count. The last element is at nums.length - 1."
+    },
+    {
+        "id": "q024",
+        "errorType": "ARRAY_LENGTH_INDEX_MISUSE",
+        "conceptTag": "array_indexing",
+        "difficulty": "Medium",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        char[] letters = {'A', 'B', 'C24'};",
+            "        char c = letters[letters.length];",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "The maximum index of an array is its length minus one."
+    },
+    {
+        "id": "q025",
+        "errorType": "ARRAY_LENGTH_INDEX_MISUSE",
+        "conceptTag": "array_indexing",
+        "difficulty": "Medium",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] nums = {5, 10, 15, 2025};",
+            "        int lastValue = nums[nums.length];",
+            "        System.out.println(lastValue);",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "nums.length gives the total count. The last element is at nums.length - 1."
+    },
+    {
+        "id": "q026",
+        "errorType": "ARRAY_LENGTH_INDEX_MISUSE",
+        "conceptTag": "array_indexing",
+        "difficulty": "Hard",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] nums = {5, 10, 15, 2026};",
+            "        int lastValue = nums[nums.length];",
+            "        System.out.println(lastValue);",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "nums.length gives the total count. The last element is at nums.length - 1."
+    },
+    {
+        "id": "q027",
+        "errorType": "ARRAY_LENGTH_INDEX_MISUSE",
+        "conceptTag": "array_indexing",
+        "difficulty": "Hard",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        char[] letters = {'A', 'B', 'C27'};",
+            "        char c = letters[letters.length];",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "The maximum index of an array is its length minus one."
+    },
+    {
+        "id": "q028",
+        "errorType": "ARRAY_LENGTH_INDEX_MISUSE",
+        "conceptTag": "array_indexing",
+        "difficulty": "Hard",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] nums = {5, 10, 15, 2028};",
+            "        int lastValue = nums[nums.length];",
+            "        System.out.println(lastValue);",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "nums.length gives the total count. The last element is at nums.length - 1."
+    },
+    {
+        "id": "q029",
+        "errorType": "ARRAY_LENGTH_INDEX_MISUSE",
+        "conceptTag": "array_indexing",
+        "difficulty": "Hard",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        char[] letters = {'A', 'B', 'C29'};",
+            "        char c = letters[letters.length];",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "The maximum index of an array is its length minus one."
+    },
+    {
+        "id": "q030",
+        "errorType": "ARRAY_LENGTH_INDEX_MISUSE",
+        "conceptTag": "array_indexing",
+        "difficulty": "Hard",
+        "gameType": "BugHunt",
+        "codeLines": [
+            "public class Main {",
+            "    public static void runCode() {",
+            "        int[] nums = {5, 10, 15, 2030};",
+            "        int lastValue = nums[nums.length];",
+            "        System.out.println(lastValue);",
+            "    }",
+            "}"
+        ],
+        "buggyLineIndex": 3,
+        "correctAnswer": 3,
+        "hints": [
+            "Look at the condition or index used.",
+            "Are you using the right operator or bound?",
+            "Remember that indices are 0-based and == is comparison."
+        ],
+        "explanation": "nums.length gives the total count. The last element is at nums.length - 1."
+    },
+    {
+        "id": "q031",
+        "errorType": "INCORRECT_CONDITIONAL_OPERATOR",
+        "conceptTag": "conditional_logic",
+        "difficulty": "Easy",
+        "gameType": "DragDrop",
+        "codeLines": [
+            "    public static void runCode() {",
+            "        System.out.println(a + b);",
+            "public class Main {",
+            "    }",
+            "        int a = 5;",
+            "}",
+            "        int b = 10;"
+        ],
+        "correctAnswer": [
+            2,
+            0,
+            4,
+            6,
+            1,
+            3,
+            5
+        ],
+        "hints": [
+            "Look for the class declaration first.",
+            "Then the main method.",
+            "Then variable declarations.",
+            "Then the print statement."
+        ],
+        "explanation": "Drag the blocks into the correct logical order to form a working program."
+    },
+    {
+        "id": "q032",
+        "errorType": "INCORRECT_CONDITIONAL_OPERATOR",
+        "conceptTag": "conditional_logic",
+        "difficulty": "Easy",
+        "gameType": "DragDrop",
+        "codeLines": [
+            "    public static void runCode() {",
+            "        System.out.println(a + b);",
+            "public class Main {",
+            "    }",
+            "        int a = 5;",
+            "}",
+            "        int b = 10;"
+        ],
+        "correctAnswer": [
+            2,
+            0,
+            4,
+            6,
+            1,
+            3,
+            5
+        ],
+        "hints": [
+            "Look for the class declaration first.",
+            "Then the main method.",
+            "Then variable declarations.",
+            "Then the print statement."
+        ],
+        "explanation": "Drag the blocks into the correct logical order to form a working program."
+    },
+    {
+        "id": "q033",
+        "errorType": "INCORRECT_CONDITIONAL_OPERATOR",
+        "conceptTag": "conditional_logic",
+        "difficulty": "Easy",
+        "gameType": "DragDrop",
+        "codeLines": [
+            "    public static void runCode() {",
+            "        System.out.println(a + b);",
+            "public class Main {",
+            "    }",
+            "        int a = 5;",
+            "}",
+            "        int b = 10;"
+        ],
+        "correctAnswer": [
+            2,
+            0,
+            4,
+            6,
+            1,
+            3,
+            5
+        ],
+        "hints": [
+            "Look for the class declaration first.",
+            "Then the main method.",
+            "Then variable declarations.",
+            "Then the print statement."
+        ],
+        "explanation": "Drag the blocks into the correct logical order to form a working program."
+    },
+    {
+        "id": "q034",
+        "errorType": "INCORRECT_CONDITIONAL_OPERATOR",
+        "conceptTag": "conditional_logic",
+        "difficulty": "Easy",
+        "gameType": "DragDrop",
+        "codeLines": [
+            "    public static void runCode() {",
+            "        System.out.println(a + b);",
+            "public class Main {",
+            "    }",
+            "        int a = 5;",
+            "}",
+            "        int b = 10;"
+        ],
+        "correctAnswer": [
+            2,
+            0,
+            4,
+            6,
+            1,
+            3,
+            5
+        ],
+        "hints": [
+            "Look for the class declaration first.",
+            "Then the main method.",
+            "Then variable declarations.",
+            "Then the print statement."
+        ],
+        "explanation": "Drag the blocks into the correct logical order to form a working program."
+    },
+    {
+        "id": "q035",
+        "errorType": "INCORRECT_CONDITIONAL_OPERATOR",
+        "conceptTag": "conditional_logic",
+        "difficulty": "Easy",
+        "gameType": "DragDrop",
+        "codeLines": [
+            "    public static void runCode() {",
+            "        System.out.println(a + b);",
+            "public class Main {",
+            "    }",
+            "        int a = 5;",
+            "}",
+            "        int b = 10;"
+        ],
+        "correctAnswer": [
+            2,
+            0,
+            4,
+            6,
+            1,
+            3,
+            5
+        ],
+        "hints": [
+            "Look for the class declaration first.",
+            "Then the main method.",
+            "Then variable declarations.",
+            "Then the print statement."
+        ],
+        "explanation": "Drag the blocks into the correct logical order to form a working program."
+    },
+    {
+        "id": "q036",
+        "errorType": "INCORRECT_CONDITIONAL_OPERATOR",
+        "conceptTag": "conditional_logic",
+        "difficulty": "Medium",
+        "gameType": "DragDrop",
+        "codeLines": [
+            "    public static void runCode() {",
+            "        System.out.println(a + b);",
+            "public class Main {",
+            "    }",
+            "        int a = 5;",
+            "}",
+            "        int b = 10;"
+        ],
+        "correctAnswer": [
+            2,
+            0,
+            4,
+            6,
+            1,
+            3,
+            5
+        ],
+        "hints": [
+            "Look for the class declaration first.",
+            "Then the main method.",
+            "Then variable declarations.",
+            "Then the print statement."
+        ],
+        "explanation": "Drag the blocks into the correct logical order to form a working program."
+    },
+    {
+        "id": "q037",
+        "errorType": "INCORRECT_CONDITIONAL_OPERATOR",
+        "conceptTag": "conditional_logic",
+        "difficulty": "Medium",
+        "gameType": "DragDrop",
+        "codeLines": [
+            "    public static void runCode() {",
+            "        System.out.println(a + b);",
+            "public class Main {",
+            "    }",
+            "        int a = 5;",
+            "}",
+            "        int b = 10;"
+        ],
+        "correctAnswer": [
+            2,
+            0,
+            4,
+            6,
+            1,
+            3,
+            5
+        ],
+        "hints": [
+            "Look for the class declaration first.",
+            "Then the main method.",
+            "Then variable declarations.",
+            "Then the print statement."
+        ],
+        "explanation": "Drag the blocks into the correct logical order to form a working program."
+    },
+    {
+        "id": "q038",
+        "errorType": "INCORRECT_CONDITIONAL_OPERATOR",
+        "conceptTag": "conditional_logic",
+        "difficulty": "Medium",
+        "gameType": "DragDrop",
+        "codeLines": [
+            "    public static void runCode() {",
+            "        System.out.println(a + b);",
+            "public class Main {",
+            "    }",
+            "        int a = 5;",
+            "}",
+            "        int b = 10;"
+        ],
+        "correctAnswer": [
+            2,
+            0,
+            4,
+            6,
+            1,
+            3,
+            5
+        ],
+        "hints": [
+            "Look for the class declaration first.",
+            "Then the main method.",
+            "Then variable declarations.",
+            "Then the print statement."
+        ],
+        "explanation": "Drag the blocks into the correct logical order to form a working program."
+    },
+    {
+        "id": "q039",
+        "errorType": "INCORRECT_CONDITIONAL_OPERATOR",
+        "conceptTag": "conditional_logic",
+        "difficulty": "Medium",
+        "gameType": "DragDrop",
+        "codeLines": [
+            "    public static void runCode() {",
+            "        System.out.println(a + b);",
+            "public class Main {",
+            "    }",
+            "        int a = 5;",
+            "}",
+            "        int b = 10;"
+        ],
+        "correctAnswer": [
+            2,
+            0,
+            4,
+            6,
+            1,
+            3,
+            5
+        ],
+        "hints": [
+            "Look for the class declaration first.",
+            "Then the main method.",
+            "Then variable declarations.",
+            "Then the print statement."
+        ],
+        "explanation": "Drag the blocks into the correct logical order to form a working program."
+    },
+    {
+        "id": "q040",
+        "errorType": "INCORRECT_CONDITIONAL_OPERATOR",
+        "conceptTag": "conditional_logic",
+        "difficulty": "Medium",
+        "gameType": "DragDrop",
+        "codeLines": [
+            "    public static void runCode() {",
+            "        System.out.println(a + b);",
+            "public class Main {",
+            "    }",
+            "        int a = 5;",
+            "}",
+            "        int b = 10;"
+        ],
+        "correctAnswer": [
+            2,
+            0,
+            4,
+            6,
+            1,
+            3,
+            5
+        ],
+        "hints": [
+            "Look for the class declaration first.",
+            "Then the main method.",
+            "Then variable declarations.",
+            "Then the print statement."
+        ],
+        "explanation": "Drag the blocks into the correct logical order to form a working program."
+    },
+    {
+        "id": "q041",
+        "errorType": "INCORRECT_CONDITIONAL_OPERATOR",
+        "conceptTag": "conditional_logic",
+        "difficulty": "Hard",
+        "gameType": "DragDrop",
+        "codeLines": [
+            "    public static void runCode() {",
+            "        System.out.println(a + b);",
+            "public class Main {",
+            "    }",
+            "        int a = 5;",
+            "}",
+            "        int b = 10;"
+        ],
+        "correctAnswer": [
+            2,
+            0,
+            4,
+            6,
+            1,
+            3,
+            5
+        ],
+        "hints": [
+            "Look for the class declaration first.",
+            "Then the main method.",
+            "Then variable declarations.",
+            "Then the print statement."
+        ],
+        "explanation": "Drag the blocks into the correct logical order to form a working program."
+    },
+    {
+        "id": "q042",
+        "errorType": "INCORRECT_CONDITIONAL_OPERATOR",
+        "conceptTag": "conditional_logic",
+        "difficulty": "Hard",
+        "gameType": "DragDrop",
+        "codeLines": [
+            "    public static void runCode() {",
+            "        System.out.println(a + b);",
+            "public class Main {",
+            "    }",
+            "        int a = 5;",
+            "}",
+            "        int b = 10;"
+        ],
+        "correctAnswer": [
+            2,
+            0,
+            4,
+            6,
+            1,
+            3,
+            5
+        ],
+        "hints": [
+            "Look for the class declaration first.",
+            "Then the main method.",
+            "Then variable declarations.",
+            "Then the print statement."
+        ],
+        "explanation": "Drag the blocks into the correct logical order to form a working program."
+    },
+    {
+        "id": "q043",
+        "errorType": "INCORRECT_CONDITIONAL_OPERATOR",
+        "conceptTag": "conditional_logic",
+        "difficulty": "Hard",
+        "gameType": "DragDrop",
+        "codeLines": [
+            "    public static void runCode() {",
+            "        System.out.println(a + b);",
+            "public class Main {",
+            "    }",
+            "        int a = 5;",
+            "}",
+            "        int b = 10;"
+        ],
+        "correctAnswer": [
+            2,
+            0,
+            4,
+            6,
+            1,
+            3,
+            5
+        ],
+        "hints": [
+            "Look for the class declaration first.",
+            "Then the main method.",
+            "Then variable declarations.",
+            "Then the print statement."
+        ],
+        "explanation": "Drag the blocks into the correct logical order to form a working program."
+    },
+    {
+        "id": "q044",
+        "errorType": "INCORRECT_CONDITIONAL_OPERATOR",
+        "conceptTag": "conditional_logic",
+        "difficulty": "Hard",
+        "gameType": "DragDrop",
+        "codeLines": [
+            "    public static void runCode() {",
+            "        System.out.println(a + b);",
+            "public class Main {",
+            "    }",
+            "        int a = 5;",
+            "}",
+            "        int b = 10;"
+        ],
+        "correctAnswer": [
+            2,
+            0,
+            4,
+            6,
+            1,
+            3,
+            5
+        ],
+        "hints": [
+            "Look for the class declaration first.",
+            "Then the main method.",
+            "Then variable declarations.",
+            "Then the print statement."
+        ],
+        "explanation": "Drag the blocks into the correct logical order to form a working program."
+    },
+    {
+        "id": "q045",
+        "errorType": "INCORRECT_CONDITIONAL_OPERATOR",
+        "conceptTag": "conditional_logic",
+        "difficulty": "Hard",
+        "gameType": "DragDrop",
+        "codeLines": [
+            "    public static void runCode() {",
+            "        System.out.println(a + b);",
+            "public class Main {",
+            "    }",
+            "        int a = 5;",
+            "}",
+            "        int b = 10;"
+        ],
+        "correctAnswer": [
+            2,
+            0,
+            4,
+            6,
+            1,
+            3,
+            5
+        ],
+        "hints": [
+            "Look for the class declaration first.",
+            "Then the main method.",
+            "Then variable declarations.",
+            "Then the print statement."
+        ],
+        "explanation": "Drag the blocks into the correct logical order to form a working program."
+    },
+    {
+        "id": "ct001",
+        "errorType": "NONE",
+        "conceptTag": "conditional_logic",
+        "difficulty": "Easy",
+        "gameType": "CodeTrace",
+        "codeLines": [
+            "int x = 5;",
+            "int y = 10;",
+            "if (x > 3) {",
+            "    y = y + x;",
+            "}",
+            "System.out.println(y);"
+        ],
+        "correctAnswer": "15",
+        "hints": [
+            "Trace the value of y.",
+            "Is x > 3 true?"
+        ],
+        "explanation": "Since x (5) is greater than 3, y becomes 10 + 5 = 15."
+    },
+    {
+        "id": "ct002",
+        "errorType": "NONE",
+        "conceptTag": "loop_boundaries",
+        "difficulty": "Medium",
+        "gameType": "CodeTrace",
+        "codeLines": [
+            "int count = 0;",
+            "for (int i = 0; i < 3; i++) {",
+            "    count += 2;",
+            "}",
+            "System.out.println(count);"
+        ],
+        "correctAnswer": "6",
+        "hints": [
+            "How many times does the loop run?",
+            "What is added to count each time?"
+        ],
+        "explanation": "The loop runs for i=0, 1, 2 (3 times). Each time, 2 is added to count. 3 * 2 = 6."
+    }
+]
