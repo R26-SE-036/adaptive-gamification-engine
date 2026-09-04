@@ -81,17 +81,26 @@ def retrain():
         if feat not in new_data_df.columns:
             return jsonify({"error": f"training_data missing feature {feat}"}), 400
 
-    # Import train-related functions to retrain model 
-    # For a real system we would append to old data, but here we just retrain
+    # Retrain on the rows supplied in the request body. This replaces the model
+    # rather than appending to the previous training set - the caller is expected
+    # to send the full corpus it wants the model fitted on.
+    #
+    # There used to be a `from train import generate_synthetic_data` here. train.py
+    # was deleted when retraining moved onto real game sessions (retrain_from_db.py
+    # says so outright: "The fake synthetic data generation script (train.py) can
+    # now be safely deleted"), but the import stayed behind - so every call to this
+    # endpoint died with ModuleNotFoundError before it reached the model. The name
+    # was never used in this function even when the module existed.
     try:
-        from train import generate_synthetic_data
         from sklearn.ensemble import RandomForestClassifier
-        
-        # In a real environment, combine previous db data, but for now just train on new data + maybe some synthetic fallback
+
         X = new_data_df[features]
         y = new_data_df['difficulty_level']
-        
-        new_model = RandomForestClassifier(n_estimators=100, random_state=42)
+
+        # max_depth=4 matches retrain_from_db.py. Without it this endpoint quietly
+        # produced a differently-regularised model than the offline trainer, so
+        # which path last wrote model.pkl changed the model's behaviour.
+        new_model = RandomForestClassifier(n_estimators=100, random_state=42, max_depth=4)
         new_model.fit(X, y)
         
         joblib.dump(new_model, MODEL_PATH)
@@ -108,4 +117,11 @@ if __name__ == '__main__':
     # (Code Coach 8000, Study Guider 8010, PairPath ml-service 8020).
     # Configurable via PORT for anyone who needs to move it - on macOS, 5000 is
     # taken by AirPlay Receiver.
-    app.run(port=int(os.environ.get('PORT', 5000)), debug=True)
+    #
+    # debug defaults OFF. It used to be hardcoded True, which turns on the
+    # Werkzeug interactive debugger - and that debugger executes arbitrary
+    # Python typed into any traceback page it serves. On a service that has no
+    # authentication of its own, anything able to reach the port would have had
+    # a shell. Opt in explicitly for local work with FLASK_DEBUG=1.
+    debug = os.environ.get('FLASK_DEBUG', '').lower() in ('1', 'true', 'yes')
+    app.run(port=int(os.environ.get('PORT', 5000)), debug=debug)
