@@ -1,94 +1,209 @@
+"""Fit the difficulty model on real game sessions, or refuse and say why.
+
+The model answers ONE question:
+
+    given what this student has done on this concept so far, how likely are
+    they to succeed at a question of difficulty D?
+
+The policy in app.py then asks it that question once per difficulty and picks
+between the answers. See training_data.py for why the target changed and what
+was wrong with fitting `difficultyLevel` directly.
+
+Usage
+    python retrain_from_db.py
+    python retrain_from_db.py --report-only        # gate + provenance, no fit
+    python retrain_from_db.py --allow-insufficient # fit anyway, stamp NOT_REPORTABLE
+
+`--allow-insufficient` exists so the service can be demonstrated end to end
+before a cohort has played anything. It writes `reportable: false` into the
+model card and every prediction the service serves carries it. Do not quote a
+metric from a model card that says false.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
 import os
-import pandas as pd
-from pymongo import MongoClient
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report, accuracy_score
+import sys
+from datetime import datetime, timezone
+
 import joblib
-from dotenv import load_dotenv
-import certifi
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import brier_score_loss, classification_report, roc_auc_score
+from sklearn.model_selection import GroupShuffleSplit
 
-# Load the env variables from the backend folder to get the MongoDB URI
-backend_env_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'backend', '.env')
-load_dotenv(backend_env_path)
+from training_data import (
+    FEATURE_COLUMNS,
+    SUCCESS_SCORE,
+    build_rows,
+    check_sufficiency,
+    load_sessions_from_mongo,
+    provenance_summary,
+)
 
-MONGO_URI = os.environ.get('MONGODB_URI')
-if not MONGO_URI:
-    print("Error: MONGODB_URI not found. Please ensure backend/.env has the credentials.")
-    exit(1)
+HERE = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(HERE, "model.pkl")
+CARD_PATH = os.path.join(HERE, "model_card.json")
 
-def retrain_model():
-    print("Connecting to secure MongoDB Atlas Cluster...")
-    client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
-    db = client['code-guru']
-    collection = db['gameSessions']
-    
-    print("Fetching authentic human game sessions...")
-    data = list(collection.find({}))
-    
-    if len(data) == 0:
-        print("No real data found in database. Simulation must be run first.")
-        exit(1)
-        
-    print(f"Brought in {len(data)} real rows from MongoDB.")
-    df = pd.DataFrame(data)
-    
-    # Feature Engineering: Organize the raw database records into the exact format our ML model expects
-    training_rows = []
-    
-    for _, session in df.iterrows():
-        # Because codeDiagnostics is owned by the Code Coach team and is currently empty, 
-        # we realistically simulate the repeat error count using the difficulty progression:
-        if session['difficultyLevel'] == 'Hard':
-            repeat_count = 0
-            games = 4
-        elif session['difficultyLevel'] == 'Medium':
-            repeat_count = 2
-            games = 2
-        else:
-            repeat_count = 4
-            games = 1
-            
-        training_rows.append({
-            'avg_score': session['score'],
-            'avg_attempts': session['attemptCount'],
-            'avg_hint_usage': session['hintUsage'],
-            'avg_time_seconds': session['timeTakenSeconds'],
-            'repeat_error_count': repeat_count,
-            'games_played': games,
-            'difficulty_level': session['difficultyLevel']
-        })
-        
-    ml_df = pd.DataFrame(training_rows)
-    
-    from sklearn.model_selection import train_test_split
-    
-    X = ml_df[['avg_score', 'avg_attempts', 'avg_hint_usage', 'avg_time_seconds', 'repeat_error_count', 'games_played']]
-    y = ml_df['difficulty_level']
-    
-    # -------------------------------------------------------------
-    # ACADEMIC ML STRATEGY: Train-Test Split to avoid "Overfitting"
-    # Hide 20% of the data from the model to see how it performs on unseen humans!
-    # -------------------------------------------------------------
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-    
-    print("\nTraining new Random Forest Classifier on 80% train / 20% test split...")
-    
-    # Prevent overfitting by limiting tree depth
-    model = RandomForestClassifier(n_estimators=100, random_state=42, max_depth=4)
-    model.fit(X_train, y_train)
-    
-    # Predict ONLY on the 20% hidden test data
-    y_pred = model.predict(X_test)
-    
-    print("\n--- Academic Model Evaluation ---")
-    print(f"Realistic Testing Accuracy: {accuracy_score(y_test, y_pred):.4f}")
-    
-    # Save the academically sound model
-    model_path = os.path.join(os.path.dirname(__file__), 'model.pkl')
-    joblib.dump(model, model_path)
-    
-    print(f"\nModel overwritten successfully: {model_path}")
-    print("The fake synthetic data generation script (train.py) can now be safely deleted.")
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--report-only", action="store_true")
+    parser.add_argument("--allow-insufficient", action="store_true")
+    parser.add_argument(
+        "--include-simulated",
+        action="store_true",
+        help="Keep seeder and manual-test rows. Implies --allow-insufficient.",
+    )
+    args = parser.parse_args()
+
+    print("Reading gameSessions from MongoDB Atlas...")
+    sessions = load_sessions_from_mongo()
+    print(f"  {len(sessions)} raw sessions")
+
+    frame = build_rows(sessions)
+    if not len(frame):
+        print(
+            "\nNo usable rows. Every training row needs at least one EARLIER session\n"
+            "by the same student on the same concept, because that history is what\n"
+            "describes them. A student's first game can be a label but never a\n"
+            "feature source."
+        )
+        return 2
+
+    all_provenance = provenance_summary(frame)
+    print(f"  {len(frame)} rows with usable history")
+    print(f"  by source: {all_provenance['by_source']}")
+
+    if not args.include_simulated:
+        frame = frame[frame["source"] == "real"].reset_index(drop=True)
+        print(f"  {len(frame)} rows after dropping seeder and manual-test sessions")
+
+    provenance = provenance_summary(frame)
+    reasons = check_sufficiency(frame)
+
+    print("\n--- Corpus ---")
+    print(json.dumps(provenance, indent=2))
+
+    reportable = not reasons and not args.include_simulated
+
+    if reasons:
+        print("\n--- This data cannot support a reportable model ---")
+        for reason in reasons:
+            print(f"  * {reason}")
+
+        if args.report_only or not (args.allow_insufficient or args.include_simulated):
+            print(
+                "\nRefusing to fit. The honest position until a cohort has played:\n"
+                "  the engine serves difficultyService.js's stated rule, which is a\n"
+                "  documented heuristic and claims nothing about learning.\n"
+                "\nTo fit anyway for a demo, pass --allow-insufficient. The model card\n"
+                "and every served prediction will say reportable: false."
+            )
+            return 2
+
+        print("\n--allow-insufficient given: fitting anyway, stamped NOT REPORTABLE.")
+
+    if args.report_only:
+        return 0
+
+    # ── Split by student, never by row ────────────────────────────────────────
+    # Rows from one student share their history almost entirely: consecutive
+    # sessions differ by one observation. A random row split would put a
+    # student's session 5 in training and session 6 in test and score itself on
+    # what it had already seen.
+    groups = frame["user_id"].to_numpy()
+    X = frame[FEATURE_COLUMNS]
+    y = frame["success"].to_numpy()
+
+    held_out = frame["user_id"].nunique() >= 4
+    if held_out:
+        splitter = GroupShuffleSplit(n_splits=1, test_size=0.25, random_state=42)
+        train_idx, test_idx = next(splitter.split(X, y, groups))
+    else:
+        print("\nToo few students to hold any out; scoring on the training rows.")
+        print("That number is meaningless and the card records it as such.")
+        train_idx = test_idx = np.arange(len(frame))
+
+    model = RandomForestClassifier(
+        n_estimators=200,
+        max_depth=5,
+        min_samples_leaf=5,
+        class_weight="balanced",
+        random_state=42,
+    )
+    model.fit(X.iloc[train_idx], y[train_idx])
+
+    metrics = evaluate(model, X.iloc[test_idx], y[test_idx], held_out=held_out)
+
+    print("\n--- Evaluation ---")
+    print(json.dumps(metrics, indent=2))
+
+    card = {
+        "target": "success",
+        "target_definition": f"score >= {SUCCESS_SCORE} on the session being predicted",
+        "trained_at": datetime.now(timezone.utc).isoformat(),
+        "reportable": reportable,
+        "not_reportable_because": reasons or None,
+        "features": FEATURE_COLUMNS,
+        "provenance": provenance,
+        "split": "GroupShuffleSplit by user_id, test_size=0.25",
+        "metrics": metrics,
+        "model": "RandomForestClassifier(n_estimators=200, max_depth=5, "
+        "min_samples_leaf=5, class_weight=balanced)",
+        "corpus_fingerprint": hashlib.sha256(
+            pd.util.hash_pandas_object(frame[FEATURE_COLUMNS + ["success"]], index=False).values
+        ).hexdigest()[:16],
+    }
+
+    joblib.dump(
+        {"model": model, "feature_columns": FEATURE_COLUMNS, "card": card},
+        MODEL_PATH,
+    )
+    with open(CARD_PATH, "w", encoding="utf-8") as handle:
+        json.dump(card, handle, indent=2)
+
+    print(f"\nWrote {MODEL_PATH}")
+    print(f"Wrote {CARD_PATH}")
+    if not reportable:
+        print("\nreportable: false - do not quote these metrics anywhere.")
+    return 0
+
+
+def evaluate(model, X_test, y_test, held_out: bool) -> dict:
+    """Threshold-free scores, because the policy consumes a probability.
+
+    Accuracy is not reported. The policy never asks "will they succeed", it asks
+    "how likely", and an accuracy figure at an arbitrary 0.5 cut says nothing
+    about whether 0.72 means 0.72. Brier and AUC do.
+    """
+    probabilities = model.predict_proba(X_test)[:, 1]
+
+    metrics: dict = {
+        "held_out": held_out,
+        "n": int(len(y_test)),
+        "positive_rate": round(float(np.mean(y_test)), 4),
+        "brier_score": round(float(brier_score_loss(y_test, probabilities)), 4),
+        "baseline_brier_predicting_base_rate": round(
+            float(brier_score_loss(y_test, np.full_like(probabilities, np.mean(y_test)))), 4
+        ),
+    }
+
+    if len(np.unique(y_test)) > 1:
+        metrics["roc_auc"] = round(float(roc_auc_score(y_test, probabilities)), 4)
+        metrics["classification_report_at_0.5"] = classification_report(
+            y_test, (probabilities >= 0.5).astype(int), output_dict=True, zero_division=0
+        )
+    else:
+        metrics["roc_auc"] = None
+        metrics["note"] = "test rows share one outcome; AUC undefined"
+
+    return metrics
+
 
 if __name__ == "__main__":
-    retrain_model()
+    sys.exit(main())

@@ -22,12 +22,22 @@ WORKDIR /app
 # produce a different model per build. retrain_from_db.py is run deliberately,
 # offline, and its output is committed - which is also why the .gitignore
 # carries an explicit `!model.pkl` negation.
-COPY app.py model.pkl ./
+# training_data.py is imported by app.py (for the feature names and the
+# difficulty ordinals) and by retrain_from_db.py, which /retrain shells out
+# to. Leaving either out builds an image that dies on import.
+COPY app.py training_data.py retrain_from_db.py model.pkl ./
 
-# Fails the build rather than shipping an image whose /predict answers
-# 500 "Model not trained yet" - the exact failure this service had in practice.
-RUN python -c "import joblib, sys; m = joblib.load('model.pkl'); \
-    print('model loaded:', type(m).__name__, 'max_depth=', getattr(m, 'max_depth', None))"
+# Fails the build rather than shipping an image whose /predict answers 503 -
+# the exact failure this service had in practice. The bundle shape is checked
+# too: a bare estimator is the pre-rewrite artifact, fitted on leaked features
+# against a different target, and app.py refuses to serve it at runtime. Better
+# to find that here than in a container that starts and then answers 503.
+RUN python -c "import joblib; b = joblib.load('model.pkl'); \
+    assert isinstance(b, dict) and 'model' in b and 'feature_columns' in b, \
+    'model.pkl is not a trained bundle - run retrain_from_db.py'; \
+    print('model loaded:', type(b['model']).__name__, \
+    '| features:', len(b['feature_columns']), \
+    '| reportable:', b.get('card', {}).get('reportable'))"
 
 ENV PORT=5000
 EXPOSE 5000

@@ -24,6 +24,23 @@ const GameSessionSchema = new mongoose.Schema({
     timeTakenSeconds: { type: Number, default: 0 },
     traceAccuracy: { type: Number, min: 0, max: 1 },
     status: { type: String, enum: GAME_SESSION_STATUSES, default: 'completed' },
+
+    // Was this difficulty served at random rather than chosen by the policy?
+    //
+    // The difficulty model can only learn what happens at levels it observes.
+    // If every session is played at the level the current rule picked, the
+    // corpus can never say what would have happened at another one, and a model
+    // fitted on it re-learns the rule that produced it. difficultyService.js
+    // therefore serves a random level a fraction of the time; these are the rows
+    // that carry information the policy did not already contain.
+    wasExploratory: { type: Boolean, default: false },
+
+    // Where this row came from. 'real' is a person playing; 'simulated' is
+    // backend/data/simulate_students.js; 'test' is manual API poking.
+    // ml-service/training_data.py drops everything that is not 'real' before
+    // fitting, so a seeded database cannot silently become a research result.
+    dataSource: { type: String, enum: ['real', 'simulated', 'test'], default: 'real', index: true },
+
     startedAt: { type: Date, default: Date.now },
     completedAt: { type: Date, default: Date.now }
 }, { collection: 'gameSessions' });

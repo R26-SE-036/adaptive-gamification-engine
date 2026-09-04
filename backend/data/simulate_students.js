@@ -4,21 +4,22 @@
  *
  * ==================== WHAT THIS DATA IS, AND IS NOT ====================
  * These are GENERATED sessions. They are not students, and nothing measured
- * here happened. Two earlier claims to the contrary have been removed from this
- * file's own output; `ml-service/retrain_from_db.py` still prints "Fetching
- * authentic human game sessions", and that line is wrong whenever this script
- * produced the rows.
+ * here happened.
  *
- * It also must not be used to train the difficulty model, though it currently
- * is the only thing that fills the collection retrain_from_db.py reads.
- * The generator below derives each session's features FROM the question's
+ * The generator below derives each session's performance FROM the question's
  * difficulty label - Hard questions get good performance, Easy questions get
- * struggling performance. A model then fitted to predict difficulty from those
- * features is not learning anything about students; it is recovering the
- * if/else on lines below. High reported accuracy is circularity, not skill.
+ * struggling performance, which is backwards as well as circular. A model
+ * fitted on it is not learning anything about students; it is recovering the
+ * if/else below.
+ *
+ * That is no longer possible by accident. Every row written here is stamped
+ * `dataSource: 'simulated'`, and ml-service/training_data.py drops anything
+ * that is not 'real' before fitting. retrain_from_db.py no longer describes
+ * these as "authentic human game sessions" either - it reports what the
+ * corpus is made of and refuses outright when there is not enough of it.
  *
  * Seeding a database to click through the UI: fine, that is what this is for.
- * Reporting a metric from a model trained on it: not fine.
+ * Reporting a metric from a model trained on it: still not fine.
  * ======================================================================
  */
 
@@ -94,7 +95,13 @@ const simulate = async () => {
             selectedAnswer: selectedAnswer, // Need to make sure it exists
             hintUsage: hintUsage,
             timeTakenSeconds: timeTakenSeconds,
-            attemptCount: attemptCount
+            attemptCount: attemptCount,
+
+            // Marks every row this script writes so the trainer drops it.
+            // Previously nothing distinguished a seeded session from a played
+            // one once it was in the collection, which is how retrain_from_db.py
+            // came to describe these as "authentic human game sessions".
+            dataSource: 'simulated'
         };
 
         try {

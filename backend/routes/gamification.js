@@ -107,6 +107,7 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
         // disagrees.
         let difficultyChosenBy = 'requested';
         let difficultyConfidence = null;
+        let difficultyWasExploratory = false;
 
         if (!resolvedDifficulty) {
             const prediction = await predictDifficulty({
@@ -117,6 +118,7 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
             resolvedDifficulty = prediction.difficulty;
             difficultyChosenBy = prediction.source;
             difficultyConfidence = prediction.confidence;
+            difficultyWasExploratory = prediction.wasExploratory === true;
         }
 
         let questions = resolvedGameType && resolvedDifficulty
@@ -169,6 +171,12 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
         safeQuestion.difficultyChosenBy = difficultyChosenBy;
         safeQuestion.difficultyConfidence = difficultyConfidence;
 
+        // Sent back so the submit call can stamp the session. An exploratory
+        // difficulty is the only kind that carries information the policy did
+        // not already have, and it is worthless to the trainer if the row that
+        // records the outcome does not say so.
+        safeQuestion.wasExploratory = difficultyWasExploratory;
+
         res.json(safeQuestion);
     } catch (err) {
         console.error(err);
@@ -180,7 +188,8 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
 router.post('/game/submit', async (req, res) => {
     try {
         const { userId, learningSessionId, gameType, conceptTag, selectedAnswer, 
-                hintUsage, timeTakenSeconds, attemptCount, questionId, traceAccuracy } = req.body;
+                hintUsage, timeTakenSeconds, attemptCount, questionId, traceAccuracy,
+                wasExploratory, dataSource } = req.body;
 
         if (!userId || !learningSessionId || !gameType || !conceptTag || selectedAnswer === undefined || !questionId) {
             return res.status(400).json({ error: 'Missing required fields for game submission' });
@@ -261,7 +270,20 @@ router.post('/game/submit', async (req, res) => {
             hintUsage: computedHintUsage,
             timeTakenSeconds: computedTimeTaken,
             traceAccuracy: Number.isFinite(traceAccuracy) ? traceAccuracy : undefined,
-            status: 'completed'
+            status: 'completed',
+
+            // Echoed back from the game payload. The client is trusted with it
+            // because it cannot benefit from lying and a wrong value only ever
+            // costs the trainer a usable row - unlike the score, which is
+            // computed here and never taken from the client.
+            wasExploratory: wasExploratory === true,
+
+            // Defaults to 'real'; the local seeder marks its own rows
+            // 'simulated' so the trainer drops them. Only these two
+            // downgrades are accepted from the client - a caller cannot
+            // promote anything TO 'real', and marking your own row as
+            // seeded only ever costs you a training row.
+            dataSource: ['simulated', 'test'].includes(dataSource) ? dataSource : 'real'
         });
         await session.save();
 
