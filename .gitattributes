@@ -1,0 +1,5 @@
+# Git normalises line endings on anything it thinks is text. A joblib pickle is
+# not text: rewriting LF to CRLF inside it corrupts the archive, and the model
+# then fails to load with an opaque unpickling error. Mark it explicitly rather
+# than relying on autodetection.
+*.pkl binary

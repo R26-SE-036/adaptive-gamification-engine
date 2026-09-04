@@ -1,4 +1,14 @@
 node_modules/
 .env
 __pycache__/
+
+# Trained artefacts are ignored by default - they are build output, and an
+# experiment's throwaway .pkl has no business in the history.
 *.pkl
+
+# model.pkl is the exception, and it has to be. It is the only artefact the
+# service actually serves: /predict returns 500 "Model not trained yet" without
+# it. While it was ignored it never reached a checkout or a container image, so
+# the backend silently fell back to its hand-written difficulty heuristic and
+# the Random Forest never ran in the product at all.
+!model.pkl

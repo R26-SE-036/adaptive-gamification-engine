@@ -22,6 +22,14 @@ __pycache__/
 ml-service/__pycache__/
 ml-service/*.pkl
 
+# ...except the one the ML service exists to serve. Without model.pkl in the
+# checkout, /predict answers 500 "Model not trained yet" and the backend falls
+# through to its heuristic - which is what happened for the whole project, so
+# the Random Forest never actually ran. Both this rule and ml-service/.gitignore
+# excluded it; a negation is needed in each, because git applies the nested file
+# too and a re-include in only one of them still leaves the file ignored.
+!ml-service/model.pkl
+
 # Build outputs
 dist/
 build/
