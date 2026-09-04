@@ -13,3 +13,8 @@ python-dotenv==1.0.1
 # heuristic. The Random Forest was never actually running.
 pymongo>=4.6
 certifi>=2024.2.2
+
+# Production WSGI server. `flask run` / app.run() is the development server and
+# says so on startup; it is single-threaded by default and not written to face
+# a network. The Dockerfile serves through gunicorn instead.
+gunicorn==21.2.0

@@ -1,15 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const axios = require('axios');
 
 const authMiddleware = require('../middleware/auth');
 const GameSession = require('../models/GameSession');
 const PlayerProfile = require('../models/PlayerProfile');
 const QuestionBank = require('../models/QuestionBank');
-const { CodeCoachError, getStrugglingConcepts } = require('../services/codeCoachClient');
+const { predictDifficulty } = require('../services/difficultyService');
 const { CONCEPT_GAME_MAPPING, GAME_TYPES, DIFFICULTY_LEVELS, DIFFICULTY_ALIASES } = require('../config/constants');
-
-const ML_SERVICE_URL = process.env.ML_SERVICE_URL || process.env.FLASK_ML_URL || 'http://127.0.0.1:5000';
 
 function getAuthenticatedUserId(req) {
     return req.user?.user_id || req.user?.userId || req.user?.id || req.user?.sub || null;
@@ -26,46 +23,22 @@ function assertUserAccess(req, userId) {
 // ALL routes protected by JWT
 router.use(authMiddleware);
 
-// GET /api/v1/gamification/dashboard/:userId
-router.get('/dashboard/:userId', async (req, res) => {
-    try {
-        const { userId } = req.params;
-
-        if (!assertUserAccess(req, userId)) {
-            return res.status(403).json({ error: 'Forbidden: cannot access this user dashboard' });
-        }
-        
-        // Struggle data comes from Code Coach, which owns it. This used to
-        // aggregate a local CodeDiagnostic collection that nothing populated
-        // except a seed script of invented errors, while the frontend read the
-        // real numbers straight from Code Coach - so the dashboard and the
-        // difficulty prediction disagreed about the same student.
-        const struggles = await getStrugglingConcepts(req.accessToken);
-
-        const weaknesses = struggles
-            .filter((s) => s.concept_tag)
-            .map((s) => ({ _id: s.concept_tag, repeatCount: s.repeat_count || 0 }))
-            .sort((a, b) => b.repeatCount - a.repeatCount);
-        
-        // Map concepts to strictly assigned game types based on domain rules
-        const results = weaknesses.map(w => ({
-            conceptTag: w._id,
-            repeatCount: w.repeatCount,
-            recommendedGame: CONCEPT_GAME_MAPPING[w._id] || 'BugHunt'
-        }));
-
-        res.json({ weaknesses: results });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error retrieving dashboard data' });
-    }
-});
+// GET /api/v1/gamification/dashboard/:userId was here.
+//
+// Deleted: nothing called it. It read struggling concepts from Code Coach and
+// mapped each to a game type, which is exactly what the dashboard already does
+// for itself against Code Coach directly. Keeping a second, slower path to the
+// same numbers only created somewhere for them to disagree.
 
 // POST /api/v1/gamification/predict-difficulty
+//
+// The explicit form of what the game route now does on its own. Kept because it
+// is useful to ask for a prediction without starting a game - and because the
+// response says which engine answered.
 router.post('/predict-difficulty', async (req, res) => {
     try {
         const { userId, conceptTag } = req.body;
-        
+
         if (!userId || !conceptTag) {
             return res.status(400).json({ error: 'userId and conceptTag are required' });
         }
@@ -74,48 +47,20 @@ router.post('/predict-difficulty', async (req, res) => {
             return res.status(403).json({ error: 'Forbidden: cannot predict for another user' });
         }
 
-        // Aggregate past performance for this user and conceptTag
-        const pastSessions = await GameSession.find({ userId, conceptTag });
-        
-        let avg_score = 50, avg_attempts = 1, avg_hint_usage = 0, avg_time_seconds = 60;
-        let games_played = pastSessions.length;
-        
-        if (games_played > 0) {
-            avg_score = pastSessions.reduce((sum, s) => sum + (s.score || 0), 0) / games_played;
-            avg_attempts = pastSessions.reduce((sum, s) => sum + (s.attemptCount || 1), 0) / games_played;
-            avg_hint_usage = pastSessions.reduce((sum, s) => sum + (s.hintUsage || 0), 0) / games_played;
-            avg_time_seconds = pastSessions.reduce((sum, s) => sum + (s.timeTakenSeconds || 0), 0) / games_played;
-        }
+        const prediction = await predictDifficulty({
+            userId,
+            conceptTag,
+            accessToken: req.accessToken
+        });
 
-        // Unresolved occurrences of this concept, from Code Coach. `active_count`
-        // is its name for what the old local query called status != resolved.
-        const struggles = await getStrugglingConcepts(req.accessToken);
-        const match = struggles.find((s) => s.concept_tag === conceptTag);
-        const repeat_error_count = match ? (match.active_count ?? match.repeat_count ?? 0) : 0;
-
-        const mlPayload = {
-            avg_score,
-            avg_attempts,
-            avg_hint_usage,
-            avg_time_seconds,
-            repeat_error_count,
-            games_played,
-            conceptTag
-        };
-
-        try {
-            const mlResponse = await axios.post(`${ML_SERVICE_URL}/predict`, mlPayload, { timeout: 5000 });
-            return res.json({ predictedDifficulty: mlResponse.data.difficulty });
-        } catch (mlError) {
-            // Production fallback keeps the engine functioning when ML service is temporarily down.
-            if (repeat_error_count >= 5 || avg_score < 45) {
-                return res.json({ predictedDifficulty: 'Easy', fallback: true });
-            }
-            if (repeat_error_count >= 2 || avg_score < 75) {
-                return res.json({ predictedDifficulty: 'Medium', fallback: true });
-            }
-            return res.json({ predictedDifficulty: 'Hard', fallback: true });
-        }
+        return res.json({
+            predictedDifficulty: prediction.difficulty,
+            source: prediction.source,
+            confidence: prediction.confidence,
+            // Preserved for callers written against the old shape, which only
+            // ever signalled the heuristic and never named it.
+            fallback: prediction.source === 'heuristic'
+        });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Failed to predict difficulty' });
@@ -146,9 +91,33 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
 
         // Difficulty needs the same treatment: Code Coach says 'beginner' /
         // 'intermediate', the bank stores Easy / Medium / Hard.
-        const resolvedDifficulty = DIFFICULTY_LEVELS.includes(difficulty)
+        let resolvedDifficulty = DIFFICULTY_LEVELS.includes(difficulty)
             ? difficulty
             : DIFFICULTY_ALIASES[String(difficulty || '').toLowerCase()];
+
+        // This is where the Random Forest earns its place in the product.
+        //
+        // Ask for 'auto' and the model picks, from this student's own history on
+        // this concept plus their unresolved struggle count from Code Coach. An
+        // unrecognised value takes the same path rather than falling through to
+        // a question of arbitrary difficulty, which is what used to happen.
+        //
+        // A caller that names a level still gets that level: a student choosing
+        // "Hard" deliberately should not be quietly overridden by a model that
+        // disagrees.
+        let difficultyChosenBy = 'requested';
+        let difficultyConfidence = null;
+
+        if (!resolvedDifficulty) {
+            const prediction = await predictDifficulty({
+                userId,
+                conceptTag,
+                accessToken: req.accessToken
+            });
+            resolvedDifficulty = prediction.difficulty;
+            difficultyChosenBy = prediction.source;
+            difficultyConfidence = prediction.confidence;
+        }
 
         let questions = resolvedGameType && resolvedDifficulty
             ? await QuestionBank.aggregate([
@@ -184,7 +153,22 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
         const safeQuestion = { ...selected };
         delete safeQuestion.correctAnswer;
         delete safeQuestion.explanation;
-        
+
+        // Say which engine chose the difficulty. A UI that tells a student their
+        // practice is adapting to them should be able to tell whether it truly
+        // is: 'model' means the Random Forest, 'heuristic' means it was down and
+        // the if/else answered, 'requested' means the caller named the level.
+        //
+        // `difficulty` is left exactly as the question bank stored it and is NOT
+        // overwritten with the level we asked for. The two both fall back
+        // independently — the type-only and concept-only queries above ignore
+        // difficulty entirely — so they genuinely can differ, and claiming the
+        // requested level when the student was handed something else would make
+        // every session record wrong at the point it matters most.
+        safeQuestion.targetDifficulty = resolvedDifficulty;
+        safeQuestion.difficultyChosenBy = difficultyChosenBy;
+        safeQuestion.difficultyConfidence = difficultyConfidence;
+
         res.json(safeQuestion);
     } catch (err) {
         console.error(err);
