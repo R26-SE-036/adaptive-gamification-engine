@@ -138,7 +138,7 @@ heuristic and the model is future work.
 | FR-06 | Performance history per student | **Done** | Append-only, drives adaptation |
 | FR-07 | Evaluate rules after every session | **Done** *(fixed today)* | Was only evaluated when the *next* game was fetched |
 | FR-08 | Assign difficulty level | **Done** *(Phase 3)* | Five levels, and the dual-threshold rule |
-| FR-09 | Assign next game type by weakness | **Done** *(fixed today)* | Was a placeholder string. Structurally limited — see below |
+| FR-09 | Assign next game type by weakness | **Done** *(Phase 4)* | Format is now a real decision, not a lookup |
 | FR-10 | Hints and support recommendations | **Partly** | Hints work; "extra practice" is never assigned as a distinct thing |
 | FR-11 | Session summary with rationale | **Done** *(fixed today)* | The rationale was the placeholder |
 | FR-12 | Send summary to Progress Tracker | **Partly** | Happens from the *browser*, not this service — see below |
@@ -234,26 +234,57 @@ never hears about it. The engine itself has no code that talks to the Progress
 Tracker at all. Moving that call server-side would be a small change and would
 make the requirement true as written.
 
-### And one structural limitation worth knowing about
+### The structural limitation, and how it was removed
 
 FR-09 asks for the game type to be chosen from diagnosed weaknesses, with rules
 like *"IF logicErrors > debugErrors THEN assign Drag & Drop"*.
 
-That cannot be honoured as written, and it is worth being precise about why.
-`CONCEPT_GAME_MAPPING` fixes **exactly one game type per concept**, and the
-question bank follows it — I checked all 75 questions:
+For most of this project that was not implementable, and the reason was in the
+**data**, not the code. `CONCEPT_GAME_MAPPING` fixed exactly one game type per
+concept and the question bank followed it:
 
 ```
 concepts with more than one game type: 0 of 14     (before Phase 2)
 concepts with more than one game type: 14 of 14    (after)
 ```
 
-**Phase 2 removed the data half of this problem.** CodeFix was authored for all
-15 error types at three difficulties — 45 questions — so every concept now has a
-second format. What remains is the code half: `CONCEPT_GAME_MAPPING` still
-returns one type per concept, so the recommendation cannot yet choose between
-them. That is the next phase, and it is now a change to a lookup rather than an
-authoring project.
+Choosing a concept chose the format. A rule "assigning Drag & Drop for logic
+errors" would have been theatre — picking a concept that happens to map to Drag
+& Drop, or naming a game the bank could not serve.
+
+**Phase 2 fixed the data** (CodeFix authored for every error type) and **Phase 4
+fixed the code**. `services/gameTypeService.js` now chooses the format from how
+the student has actually done in each format the bank can serve for that concept.
+
+The ordering idea is that the four games differ in what they ask a student to
+**do**, and those demands are ordered:
+
+| | asks the student to | demand |
+|---|---|---|
+| Bug Hunt | recognise — point at the wrong line | lowest |
+| Drag & Drop | arrange — put pieces in order | middle |
+| Code Trace | predict — say what it does | middle |
+| CodeFix | **produce** — write the fix | highest |
+
+**Recognise before produce.** A student who cannot yet spot a broken loop bound
+is not helped by being asked to write the corrected one. Failing at a format
+steps down the ladder; being comfortable at one steps up. Verified live on a
+concept the student had never played:
+
+```
+never played              -> BugHunt   [G1_start_low]
+two strong BugHunt rounds -> CodeFix   [G3_step_up]
+two failed CodeFix rounds -> BugHunt   [G2_step_down]
+```
+
+That is a pedagogical claim rather than a measurement, which is exactly why it
+is a named table in one file rather than something fitted — the same division of
+labour as difficulty, where the model says how likely success is and a rule says
+what should happen about it.
+
+**One honest limit.** Each concept currently offers precisely two formats —
+CodeFix and one other — so in practice this chooses between "recognise" and
+"produce". The ladder is written for four because the bank can grow into it.
 
 So game type is not an independent decision at all. Choosing a concept chooses
 the type. A rule that "assigns Drag & Drop for logic errors" would either be

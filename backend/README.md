@@ -165,6 +165,28 @@ Typed answers are marked by `services/gradingService.js`: whitespace outside
 string literals is insignificant, everything else is significant, and a question
 may list several accepted forms of the same fix. `npm test` covers it.
 
+## Choosing the format
+
+The four games differ in what they ask a student to do, and those demands are
+ordered:
+
+| | asks the student to | demand |
+|---|---|---|
+| `BugHunt` | recognise - point at the wrong line | lowest |
+| `DragDrop` | arrange - put pieces in order | middle |
+| `CodeTrace` | predict - say what it does | middle |
+| `CodeFix` | **produce** - write the fix | highest |
+
+**Recognise before produce.** `services/gameTypeService.js` starts a new concept
+at the lowest demand the bank can serve, steps up when the student is
+comfortable, and steps back down when they are not - because a student who
+cannot yet spot a broken loop bound is not helped by being asked to write the
+corrected one.
+
+Ask for `auto` as the game type in the URL and the chooser decides. Name a type
+and that type is served: a student choosing CodeFix deliberately should not be
+quietly overridden.
+
 ## Difficulty and progression
 
 Five levels: **Beginner, Elementary, Intermediate, Advanced, Expert**.

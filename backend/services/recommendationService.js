@@ -13,34 +13,19 @@
  * - a literal placeholder, sent to the client on every completed game for the
  * life of the project. Nothing downstream could act on it, and nothing did.
  *
- * ==================== WHAT FR-09 CAN AND CANNOT MEAN HERE ====================
- * The proposal frames game type as a free choice driven by error type:
+ * ========================= CONCEPT HERE, FORMAT THERE ========================
+ * A recommendation is two decisions: WHAT to practise and IN WHICH FORMAT.
  *
- *     IF errorType = 'syntax' AND frequency > 3   THEN assign Bug Hunt
- *     IF logicErrors > debugErrors                THEN assign Drag & Drop
+ * This file owns the first. services/gameTypeService.js owns the second, and
+ * for a long time there was nothing for it to own: `CONCEPT_GAME_MAPPING` fixed
+ * one game type per concept and the bank followed it, so choosing a concept
+ * chose the format. Measured on the live bank at the time:
  *
- * The implementation cannot honour that, and it is worth being precise about
- * why rather than pretending otherwise. `CONCEPT_GAME_MAPPING` in
- * config/constants.js fixes exactly one game type per concept, and the question
- * bank follows it - all 75 questions sit at that one type, with no concept
- * carrying a second. Measured on the live bank:
+ *     concepts with more than one game type: 0 of 14   (now 14 of 14)
  *
- *     concepts with more than one game type: 0 of 14
- *
- * So game type is not an independent decision at all: choosing a concept
- * chooses the type. A rule that "assigns Drag & Drop for logic errors" would be
- * theatre - it would either pick a concept that happens to map to Drag & Drop,
- * or name a game the bank cannot serve.
- *
- * This file therefore recommends the CONCEPT, and reports the type that follows
- * from it. That is the decision the data can actually support. Making type a
- * real choice means authoring the same concept at several formats; until then
- * the honest version is this one, and docs/proposal-gap-analysis.md records the
- * gap rather than hiding it behind unreachable branches.
- *
- * (An earlier draft of this file had two extra rules - "weak in another format
- * on this concept" and "a format on this concept never tried". Both were dead
- * on arrival for the reason above: `playableTypes` returned nothing every time.)
+ * Authoring CodeFix for every error type gave every concept a second format, so
+ * the second decision became real and moved to its own module. This file now
+ * asks it rather than reading a lookup table.
  *
  * ========================== HOW THE CHOICE IS MADE ==========================
  * A priority-ordered rule set, matching the proposal's "rule-based expert
@@ -69,6 +54,7 @@ const GameSession = require('../models/GameSession');
 const QuestionBank = require('../models/QuestionBank');
 const { CONCEPT_GAME_MAPPING, CONCEPT_TAGS, GAME_TYPES } = require('../config/constants');
 const { SUCCESS_SCORE } = require('./difficultyService');
+const { chooseGameType } = require('./gameTypeService');
 
 /** The concepts from `candidates` the bank actually holds questions for. */
 async function servableConcepts(candidates) {
@@ -82,9 +68,29 @@ async function servableConcepts(candidates) {
     return new Set(rows.map((row) => row._id));
 }
 
-/** The game type that follows from a concept, per CONCEPT_GAME_MAPPING. */
-function gameTypeFor(conceptTag) {
-    return CONCEPT_GAME_MAPPING[conceptTag] || GAME_TYPES[0];
+/**
+ * The format to practise a concept in, for this student.
+ *
+ * This used to be `CONCEPT_GAME_MAPPING[conceptTag]` - a fixed lookup, so the
+ * format followed automatically from the concept and there was no second
+ * decision to make. services/gameTypeService.js makes it a real one now, from
+ * how the student has done in each format the bank offers for that concept.
+ *
+ * Never throws: a recommendation is produced on the path of a student who has
+ * just finished a game, and a chooser that could not reach the database must
+ * not cost them their result. The old mapping is the fallback.
+ */
+async function gameTypeFor(userId, conceptTag) {
+    try {
+        const choice = await chooseGameType({ userId, conceptTag });
+        return { gameType: choice.gameType, why: choice.reason };
+    } catch (error) {
+        console.warn(
+            `[recommendation] Could not choose a format for concept=${conceptTag}: ` +
+                `${error.message}`
+        );
+        return { gameType: CONCEPT_GAME_MAPPING[conceptTag] || GAME_TYPES[0], why: null };
+    }
 }
 
 function label(conceptTag) {
@@ -97,12 +103,6 @@ function label(conceptTag) {
  *   student who has just finished a game, so "no recommendation" is not useful.
  */
 async function recommendNextGame({ userId, conceptTag, lastScore }) {
-    const stay = {
-        gameType: gameTypeFor(conceptTag),
-        conceptTag,
-        rule: 'R4_default',
-        reason: `Another round of ${label(conceptTag)} to keep it fresh.`
-    };
 
     // ── R1: not through this concept yet ─────────────────────────────────────
     // Their best on this concept, not just the round they have this second - one
@@ -115,11 +115,14 @@ async function recommendNextGame({ userId, conceptTag, lastScore }) {
     const bestHere = Math.max(best[0]?.best ?? 0, lastScore ?? 0);
 
     if (bestHere < SUCCESS_SCORE) {
+        const format = await gameTypeFor(userId, conceptTag);
         return {
-            gameType: gameTypeFor(conceptTag),
+            gameType: format.gameType,
             conceptTag,
             rule: 'R1_not_cleared',
-            reason: `You have not cleared ${label(conceptTag)} yet, so the next round stays on it.`
+            reason:
+                `You have not cleared ${label(conceptTag)} yet, so the next round ` +
+                `stays on it.` + (format.why ? ` ${format.why}` : '')
         };
     }
 
@@ -137,13 +140,15 @@ async function recommendNextGame({ userId, conceptTag, lastScore }) {
         const pick = elsewhere.find((row) => servable.has(row._id));
 
         if (pick) {
+            const format = await gameTypeFor(userId, pick._id);
             return {
-                gameType: gameTypeFor(pick._id),
+                gameType: format.gameType,
                 conceptTag: pick._id,
                 rule: 'R2_weakest_other_concept',
                 reason:
                     `${label(conceptTag)} is covered. ${label(pick._id)} is your ` +
-                    `weakest concept at ${Math.round(pick.average)}%.`
+                    `weakest concept at ${Math.round(pick.average)}%.` +
+                    (format.why ? ` ${format.why}` : '')
             };
         }
     }
@@ -157,8 +162,9 @@ async function recommendNextGame({ userId, conceptTag, lastScore }) {
         const pick = unplayed.find((tag) => servable.has(tag));
 
         if (pick) {
+            const format = await gameTypeFor(userId, pick);
             return {
-                gameType: gameTypeFor(pick),
+                gameType: format.gameType,
                 conceptTag: pick,
                 rule: 'R3_new_concept',
                 reason:
@@ -169,7 +175,15 @@ async function recommendNextGame({ userId, conceptTag, lastScore }) {
     }
 
     // ── R4: nothing left to go on ────────────────────────────────────────────
-    return stay;
+    const format = await gameTypeFor(userId, conceptTag);
+    return {
+        gameType: format.gameType,
+        conceptTag,
+        rule: 'R4_default',
+        reason:
+            `Another round of ${label(conceptTag)} to keep it fresh.` +
+            (format.why ? ` ${format.why}` : '')
+    };
 }
 
 module.exports = { recommendNextGame, servableConcepts, gameTypeFor };

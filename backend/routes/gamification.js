@@ -9,6 +9,7 @@ const GameAttempt = require('../models/GameAttempt');
 const { predictDifficulty } = require('../services/difficultyService');
 const { recommendNextGame } = require('../services/recommendationService');
 const { gradeAnswer } = require('../services/gradingService');
+const { chooseGameType } = require('../services/gameTypeService');
 const { CONCEPT_GAME_MAPPING, GAME_TYPES, DIFFICULTY_LEVELS, DIFFICULTY_ALIASES } = require('../config/constants');
 
 function getAuthenticatedUserId(req) {
@@ -95,13 +96,26 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
         // Code Coach recommends a KIND of practice using its own vocabulary
         // (bug_hunt, loop_tracer, condition_debug, debug_challenge), and the
         // frontend passes that straight through in the URL. The question bank is
-        // keyed by THIS engine's three types, so an unresolved value matched
+        // keyed by THIS engine's own types, so an unresolved value matched
         // nothing: the query fell through to the concept-only fallback, which
         // ignores difficulty and returns a game of a different type than the URL
         // claims. That is why games appeared but the UI rendered wrong.
-        const resolvedGameType = GAME_TYPES.includes(gameType)
-            ? gameType
-            : CONCEPT_GAME_MAPPING[conceptTag];
+        //
+        // An unresolved value used to become CONCEPT_GAME_MAPPING[conceptTag] -
+        // a fixed lookup, one format per concept, which is precisely why FR-09
+        // could not be satisfied. It now goes through the chooser, which reads
+        // how this student has done in each format the bank can serve for this
+        // concept. See services/gameTypeService.js.
+        let resolvedGameType = GAME_TYPES.includes(gameType) ? gameType : null;
+        let gameTypeChosenBy = 'requested';
+        let gameTypeReason = null;
+
+        if (!resolvedGameType) {
+            const choice = await chooseGameType({ userId, conceptTag });
+            resolvedGameType = choice.gameType;
+            gameTypeChosenBy = choice.rule;
+            gameTypeReason = choice.reason;
+        }
 
         // Difficulty needs the same treatment: Code Coach says 'beginner' /
         // 'intermediate', the bank stores Easy / Medium / Hard.
@@ -184,6 +198,11 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
         safeQuestion.targetDifficulty = resolvedDifficulty;
         safeQuestion.difficultyChosenBy = difficultyChosenBy;
         safeQuestion.difficultyConfidence = difficultyConfidence;
+
+        // Same contract as the difficulty fields: a UI telling a student their
+        // practice adapts to them should be able to say what adapted and why.
+        safeQuestion.gameTypeChosenBy = gameTypeChosenBy;
+        safeQuestion.gameTypeReason = gameTypeReason;
 
         // Sent back so the submit call can stamp the session. An exploratory
         // difficulty is the only kind that carries information the policy did
