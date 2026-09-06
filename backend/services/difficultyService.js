@@ -36,6 +36,8 @@ const axios = require('axios');
 
 const GameSession = require('../models/GameSession');
 const { getStrugglingConcepts } = require('./codeCoachClient');
+const { currentLevel, permittedBand } = require('./progressionService');
+const { DIFFICULTY_LEVELS } = require('../config/constants');
 
 const ML_SERVICE_URL =
     process.env.ML_SERVICE_URL || process.env.FLASK_ML_URL || 'http://127.0.0.1:5000';
@@ -61,7 +63,9 @@ const EXPLORATION_RATE = Number(
         : 0.15
 );
 
-const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
+// The five levels, from config so this file and the ML service cannot disagree
+// about what exists or in what order.
+const DIFFICULTIES = DIFFICULTY_LEVELS;
 
 /**
  * The history features, in the order ml/training_data.py lists them.
@@ -91,10 +95,13 @@ const SUCCESS_SCORE = Number(process.env.SUCCESS_SCORE || 70);
  * calling the result a prediction is how the previous version got its numbers.
  */
 async function buildFeatures({ userId, conceptTag }) {
-    const pastSessions = await GameSession.find({ userId, conceptTag })
-        .sort({ completedAt: 1 })
-        .lean();
+    return featuresFrom(
+        await GameSession.find({ userId, conceptTag }).sort({ completedAt: 1 }).lean()
+    );
+}
 
+/** The pure half, so a caller holding the sessions does not re-query for them. */
+function featuresFrom(pastSessions) {
     const gamesPlayed = pastSessions.length;
 
     if (gamesPlayed === 0) {
@@ -157,9 +164,9 @@ async function fetchRepeatErrorCount({ conceptTag, accessToken }) {
  * student can still play, and so a first game has a defensible starting point.
  */
 function heuristicDifficulty(features, repeatErrorCount = 0) {
-    if ((repeatErrorCount ?? 0) >= 5 || features.avg_score < 45) return 'Easy';
-    if ((repeatErrorCount ?? 0) >= 2 || features.avg_score < 75) return 'Medium';
-    return 'Hard';
+    if ((repeatErrorCount ?? 0) >= 5 || features.avg_score < 45) return 'Beginner';
+    if ((repeatErrorCount ?? 0) >= 2 || features.avg_score < 75) return 'Intermediate';
+    return 'Advanced';
 }
 
 /**
@@ -177,6 +184,13 @@ function heuristicDifficulty(features, repeatErrorCount = 0) {
  *   documents impossible to reintroduce unnoticed.
  */
 async function predictDifficulty({ userId, conceptTag, accessToken }) {
+    // The sessions are loaded once and used twice - by the feature builder and
+    // by the progression rule. Two queries for the same rows would have doubled
+    // the slowest local part of a decision already over its NFR-01 budget.
+    const sessionsPromise = GameSession.find({ userId, conceptTag })
+        .sort({ completedAt: 1 })
+        .lean();
+
     // In parallel, because they are independent and both are remote: the
     // features come from MongoDB Atlas and the struggle count from Code Coach.
     // Awaited one after the other they cost the sum of two round trips, which on
@@ -184,45 +198,63 @@ async function predictDifficulty({ userId, conceptTag, accessToken }) {
     // whole decision. Overlapping them does not meet that budget on its own -
     // see docs/proposal-gap-analysis.md - but paying for the slower call twice
     // was pure waste.
-    const [features, repeatErrorCount] = await Promise.all([
-        buildFeatures({ userId, conceptTag }),
+    const [sessions, repeatErrorCount] = await Promise.all([
+        sessionsPromise,
         fetchRepeatErrorCount({ conceptTag, accessToken })
     ]);
 
+    const features = featuresFrom(sessions);
+
+    // -- Where the dual-threshold rule says this student is -------------------
+    // FR-08. The rule owns progression; the model chooses within the band it
+    // permits. See services/progressionService.js for why they are split.
+    const progression = currentLevel(sessions);
+    const band = permittedBand(progression);
+
     // ── Cold start ────────────────────────────────────────────────────────────
     if (features.games_played === 0) {
+        // "All students start at the Beginner level" - the proposal, section 4.1.
+        // This used to consult the heuristic and could open at the middle level,
+        // which is a worse first experience and is not what was specified.
         return {
-            difficulty: heuristicDifficulty({ avg_score: 50 }, repeatErrorCount),
+            difficulty: progression.level,
             source: 'cold_start',
             confidence: null,
             features,
             repeatErrorCount,
+            progression,
             wasExploratory: false,
-            reason: 'No sessions on this concept yet, so there is no history to read.'
+            reason: progression.reason
         };
     }
 
     // ── Exploration ───────────────────────────────────────────────────────────
     // Before consulting the model, so the choice is genuinely independent of it.
     if (EXPLORATION_RATE > 0 && Math.random() < EXPLORATION_RATE) {
-        const difficulty = DIFFICULTIES[Math.floor(Math.random() * DIFFICULTIES.length)];
+        // Random WITHIN THE BAND, not across all five. Exploring the whole
+        // ladder would hand a Beginner an Expert game one time in seven, which
+        // is not a corpus improvement worth that experience - and it would make
+        // the stability FR-08 asks for a fiction.
+        const difficulty = band[Math.floor(Math.random() * band.length)];
         return {
             difficulty,
             source: 'exploration',
             confidence: null,
             features,
             repeatErrorCount,
+            progression,
             wasExploratory: true,
             reason:
-                `Exploratory: served at random (rate ${EXPLORATION_RATE}) so the corpus ` +
-                `contains outcomes this policy would not have chosen.`
+                `Exploratory: served at random from ${band.join('/')} (rate ` +
+                `${EXPLORATION_RATE}) so the corpus contains outcomes this policy ` +
+                `would not have chosen.`
         };
     }
 
     try {
         const response = await axios.post(
             `${ML_SERVICE_URL}/predict`,
-            { ...features, conceptTag },
+            { ...features, conceptTag, candidates: band },
             { timeout: ML_TIMEOUT_MS }
         );
 
@@ -236,14 +268,31 @@ async function predictDifficulty({ userId, conceptTag, accessToken }) {
         // be handed Hard on the strength of past game scores. Stated here rather
         // than buried in weights, and reported so a capped choice is visible.
         let guard;
-        if ((repeatErrorCount ?? 0) >= 5 && difficulty !== 'Easy') {
-            guard = `capped to Easy: ${repeatErrorCount} unresolved struggles on this concept`;
-            difficulty = 'Easy';
+        const floor = band[0];
+        if ((repeatErrorCount ?? 0) >= 5 && difficulty !== floor) {
+            guard =
+                `capped to ${floor}: ${repeatErrorCount} unresolved struggles on this ` +
+                `concept`;
+            difficulty = floor;
+        }
+
+        // The model must not leapfrog the progression rule. It is asked only
+        // about the band, so this should never fire - but a service answering
+        // outside the set it was given is exactly the kind of drift that went
+        // unnoticed here before, and silently accepting it would undo FR-08.
+        if (!band.includes(difficulty)) {
+            console.warn(
+                `[difficulty] ML service answered ${difficulty}, outside the permitted ` +
+                    `band ${band.join('/')}. Falling back to ${progression.level}.`
+            );
+            guard = `ML answered outside the permitted band; using ${progression.level}`;
+            difficulty = progression.level;
         }
 
         return {
             difficulty,
             source: 'model',
+            progression,
             confidence: response.data?.confidence ?? null,
             predictedSuccess: response.data?.predicted_success ?? null,
             policy: response.data?.policy ?? null,
@@ -266,11 +315,17 @@ async function predictDifficulty({ userId, conceptTag, accessToken }) {
         );
 
         return {
-            difficulty: heuristicDifficulty(features, repeatErrorCount),
+            // Clamped into the band: with the ML service down, the progression
+            // rule alone decides, which is exactly the engine the proposal
+            // describes. The heuristic only refines within what it permits.
+            difficulty: band.includes(heuristicDifficulty(features, repeatErrorCount))
+                ? heuristicDifficulty(features, repeatErrorCount)
+                : progression.level,
             source: 'heuristic',
             confidence: null,
             features,
             repeatErrorCount,
+            progression,
             wasExploratory: false,
             reason: detail
         };
@@ -279,6 +334,7 @@ async function predictDifficulty({ userId, conceptTag, accessToken }) {
 
 module.exports = {
     FEATURE_NAMES,
+    featuresFrom,
     SUCCESS_SCORE,
     EXPLORATION_RATE,
     buildFeatures,

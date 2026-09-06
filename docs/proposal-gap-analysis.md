@@ -137,7 +137,7 @@ heuristic and the model is future work.
 | FR-05 | Collaboration data | **Missing** | Needs FR-03 |
 | FR-06 | Performance history per student | **Done** | Append-only, drives adaptation |
 | FR-07 | Evaluate rules after every session | **Done** *(fixed today)* | Was only evaluated when the *next* game was fetched |
-| FR-08 | Assign difficulty level | **Partly** | 3 levels, not 5. No dual-threshold rule |
+| FR-08 | Assign difficulty level | **Done** *(Phase 3)* | Five levels, and the dual-threshold rule |
 | FR-09 | Assign next game type by weakness | **Done** *(fixed today)* | Was a placeholder string. Structurally limited — see below |
 | FR-10 | Hints and support recommendations | **Partly** | Hints work; "extra practice" is never assigned as a distinct thing |
 | FR-11 | Session summary with rationale | **Done** *(fixed today)* | The rationale was the placeholder |
@@ -203,13 +203,27 @@ itself. Sessions carry `errorCountMeasured` so a rule reading `errorCount > n`
 can tell a real count from the old floor — the three original games still answer
 once and still fall back to the 0/1 value.
 
-**Difficulty has 3 levels, not 5.** The proposal names Beginner, Elementary,
-Intermediate, Advanced and Expert, and describes a "dual-threshold" rule where a
-student only moves after *two consecutive* sessions above or below the line —
-specifically so one bad day doesn't bounce them around. The implementation has
-Easy, Medium and Hard, and moves on a single session. Either the proposal should
-say three, or two more tiers of questions need writing (the bank is currently 75
-questions across 3 levels; 5 levels would want ~125 to stay balanced).
+**Difficulty now has all five levels — fixed in Phase 3.** It was Easy, Medium
+and Hard, moving on a single session, so one unlucky round could drop a student a
+whole level.
+
+The ladder is Beginner, Elementary, Intermediate, Advanced, Expert, and the
+dual-threshold rule (`services/progressionService.js`) moves a student only after
+**two consecutive sessions** at or above 80% (advance) or at or below 40%
+(regress) — and only sessions at their *current* level count, so a promotion
+cannot carry its own evidence forward and promote again.
+
+The rule and the model do different jobs. The rule decides whether the student
+moves; the model then chooses within the range between where they were and where
+the rule put them. So **the model can decline a move the rule wants and can never
+make one the rule did not**, which is what actually delivers the stability FR-08
+asks for.
+
+Question coverage went from 120 to 150, and every one of the 70 (concept, level)
+pairs now has at least one question. **Elementary and Expert are CodeFix-only**,
+because they were authored as part of that game — a request for Bug Hunt at
+Elementary falls back to another format. Filling them means authoring at the
+other three game types.
 
 **FR-12 works, but not from this component.** The proposal says *the system*
 shall send a summary to the Progress Tracker after every session. What actually

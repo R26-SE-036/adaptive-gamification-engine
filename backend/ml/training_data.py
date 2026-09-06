@@ -80,8 +80,31 @@ HISTORY_FEATURES = [
 ]
 FEATURE_COLUMNS = HISTORY_FEATURES + ["difficulty_ordinal"]
 
-DIFFICULTY_ORDINAL = {"Easy": 0, "Medium": 1, "Hard": 2}
+# The five levels, in the same order as DIFFICULTY_LEVELS in the backend's
+# config/constants.js. The ordinal is a MODEL FEATURE, so this ordering is
+# baked into every fitted model: changing it invalidates model.pkl rather than
+# merely renaming something.
+DIFFICULTY_ORDINAL = {
+    "Beginner": 0,
+    "Elementary": 1,
+    "Intermediate": 2,
+    "Advanced": 3,
+    "Expert": 4,
+}
 ORDINAL_DIFFICULTY = {v: k for k, v in DIFFICULTY_ORDINAL.items()}
+
+# Sessions recorded before the five-level change. Mapped rather than dropped:
+# they are the only real history that exists, and discarding them to avoid a
+# rename would cost more than it protects. Easy -> Beginner, Medium ->
+# Intermediate, Hard -> Advanced places the old scale where it was meant.
+LEGACY_DIFFICULTY = {"Easy": "Beginner", "Medium": "Intermediate", "Hard": "Advanced"}
+
+
+def canonical_difficulty(value):
+    """A level name from any era of this codebase, or None."""
+    if value in DIFFICULTY_ORDINAL:
+        return value
+    return LEGACY_DIFFICULTY.get(value)
 
 # A session counts as a success at or above this score. Chosen to match the
 # platform's pass mark rather than picked here; it is the same 70 the quiz
@@ -147,8 +170,10 @@ def build_rows(sessions: list[dict]) -> pd.DataFrame:
 
         if not user_id or not concept or completed is None:
             continue
-        if difficulty not in DIFFICULTY_ORDINAL:
+        difficulty = canonical_difficulty(difficulty)
+        if difficulty is None:
             continue
+        session["difficultyLevel"] = difficulty
 
         ordered.setdefault((user_id, concept), []).append(session)
 

@@ -132,7 +132,14 @@ Seeding a fresh database:
 
 ```bash
 node data/seed_75_questions.js        # BugHunt / DragDrop / CodeTrace
-node data/seed_codefix_questions.js   # CodeFix
+node data/seed_codefix_questions.js   # CodeFix, 5 per error type
+```
+
+Moving an existing three-level database onto the five-level ladder:
+
+```bash
+node data/migrate_to_five_levels.js           # dry run
+node data/migrate_to_five_levels.js --apply
 ```
 
 Then start `codeguru-web` (`npm run dev`, port 4200) and sign in with a real
@@ -157,6 +164,33 @@ Sessions carry `errorCountMeasured` so a rule can tell the two apart.
 Typed answers are marked by `services/gradingService.js`: whitespace outside
 string literals is insignificant, everything else is significant, and a question
 may list several accepted forms of the same fix. `npm test` covers it.
+
+## Difficulty and progression
+
+Five levels: **Beginner, Elementary, Intermediate, Advanced, Expert**.
+
+`services/progressionService.js` owns where a student is. It moves them only
+after two consecutive sessions at or above 80% (advance) or at or below 40%
+(regress), and only sessions at their current level count toward that run - so a
+promotion cannot immediately promote again on the same evidence.
+
+The model does not choose the level; it chooses *within* what the rule permits.
+The permitted band is the inclusive range between where the student was and
+where the rule just put them:
+
+| the rule... | band | so the model... |
+|---|---|---|
+| holds them | `{ current }` | has no choice |
+| advances | `{ previous, next }` | may decline the move |
+| regresses | `{ next, previous }` | may decline the move |
+
+It is a brake, never an engine. With the ML service down the rule alone decides,
+which is exactly the engine the proposal describes.
+
+Every level name from every era resolves through `resolveDifficulty` - Code
+Coach's `beginner`/`intermediate`, and the retired `Easy`/`Medium`/`Hard`
+(mapped to Beginner/Intermediate/Advanced), so old links and old sessions still
+work.
 
 ## The difficulty model
 

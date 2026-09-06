@@ -47,7 +47,25 @@ const ERROR_TYPES = [
     'WHILE_VARIABLE_NOT_UPDATED'
 ];
 
-const DIFFICULTY_LEVELS = ['Easy', 'Medium', 'Hard'];
+/**
+ * The five difficulty levels, in order from easiest to hardest.
+ *
+ * ORDER IS LOAD-BEARING. Progression walks this array by index (see
+ * services/progressionService.js) and the ML service turns it into the ordinal
+ * feature the model is fitted on, so reordering it silently changes both.
+ *
+ * This was Easy / Medium / Hard. Three levels made the proposal's dual-threshold
+ * progression almost meaningless - with only one step either side of the middle,
+ * a student who advanced once was already at the ceiling.
+ */
+const DIFFICULTY_LEVELS = ['Beginner', 'Elementary', 'Intermediate', 'Advanced', 'Expert'];
+
+/** 0-based position on the ladder, or -1 for anything unrecognised. */
+const difficultyIndex = (level) => DIFFICULTY_LEVELS.indexOf(level);
+
+/** Clamp an index back onto the ladder. */
+const difficultyAt = (index) =>
+    DIFFICULTY_LEVELS[Math.max(0, Math.min(DIFFICULTY_LEVELS.length - 1, index))];
 
 /**
  * Code Coach's difficulty vocabulary mapped onto this engine's.
@@ -58,13 +76,28 @@ const DIFFICULTY_LEVELS = ['Easy', 'Medium', 'Hard'];
  * purpose is adaptive difficulty quietly stops adapting.
  */
 const DIFFICULTY_ALIASES = {
-    beginner: 'Easy',
-    intermediate: 'Medium',
-    advanced: 'Hard',
-    easy: 'Easy',
-    medium: 'Medium',
-    hard: 'Hard'
+    beginner: 'Beginner',
+    elementary: 'Elementary',
+    intermediate: 'Intermediate',
+    advanced: 'Advanced',
+    expert: 'Expert',
+
+    // The retired three-level scale. Every game session written before this
+    // change still says Easy / Medium / Hard, and Code Coach still recommends
+    // 'beginner' / 'intermediate'. Easy -> Beginner, Medium -> Intermediate,
+    // Hard -> Advanced places the old scale on the new one at the points that
+    // were actually meant: the old middle was the middle, and the old top was
+    // hard-but-reachable rather than the new ceiling.
+    easy: 'Beginner',
+    medium: 'Intermediate',
+    hard: 'Advanced'
 };
+
+/** Resolve any known spelling to a level on the ladder, or null. */
+function resolveDifficulty(value) {
+    if (DIFFICULTY_LEVELS.includes(value)) return value;
+    return DIFFICULTY_ALIASES[String(value || '').toLowerCase()] ?? null;
+}
 
 const GAME_SESSION_STATUSES = ['started', 'completed', 'abandoned'];
 
@@ -107,6 +140,9 @@ module.exports = {
     ERROR_TYPES,
     DIFFICULTY_LEVELS,
     DIFFICULTY_ALIASES,
+    difficultyIndex,
+    difficultyAt,
+    resolveDifficulty,
     GAME_SESSION_STATUSES,
     CONCEPT_GAME_MAPPING
 };

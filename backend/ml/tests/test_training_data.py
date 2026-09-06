@@ -65,7 +65,7 @@ def test_no_feature_determines_the_label():
                     user,
                     "loops",
                     index * 10,
-                    ["Easy", "Medium", "Hard"][index % 3],
+                    ["Beginner", "Intermediate", "Advanced"][index % 3],
                     # Scores that vary independently of difficulty.
                     [95, 40, 80, 20, 100, 55][(index + user_index) % 6],
                 )
@@ -93,15 +93,15 @@ def test_a_sessions_own_outcome_never_appears_in_its_own_features():
     rows would differ too.
     """
     shared = [
-        ("early", 0, "Easy", 80),
-        ("mid", 10, "Medium", 60),
+        ("early", 0, "Beginner", 80),
+        ("mid", 10, "Intermediate", 60),
     ]
     rows = []
     for user, final_score in (("passer", 100), ("failer", 0)):
         for _, offset, difficulty, score in shared:
             rows.append(session(user, "loops", offset, difficulty, score))
         rows.append(
-            session(user, "loops", 20, "Hard", final_score,
+            session(user, "loops", 20, "Advanced", final_score,
                     attemptCount=9, hintUsage=9, timeTakenSeconds=999)
         )
 
@@ -125,9 +125,9 @@ def test_a_sessions_own_outcome_never_appears_in_its_own_features():
 def test_history_features_ignore_later_sessions():
     """A row's features must not see the future."""
     rows = [
-        session("u1", "loops", 0, "Easy", 100),
-        session("u1", "loops", 10, "Medium", 50),
-        session("u1", "loops", 20, "Hard", 0),
+        session("u1", "loops", 0, "Beginner", 100),
+        session("u1", "loops", 10, "Intermediate", 50),
+        session("u1", "loops", 20, "Advanced", 0),
     ]
     frame = build_rows(rows).sort_values("games_played").reset_index(drop=True)
 
@@ -145,13 +145,13 @@ def test_history_features_ignore_later_sessions():
 # ── Row construction ─────────────────────────────────────────────────────────
 def test_first_session_produces_no_row():
     """A student's first game has no history, so it cannot be described."""
-    assert len(build_rows([session("u1", "loops", 0, "Easy", 100)])) == 0
+    assert len(build_rows([session("u1", "loops", 0, "Beginner", 100)])) == 0
 
 
 def test_sessions_are_ordered_by_time_not_insertion():
     rows = [
-        session("u1", "loops", 30, "Hard", 0),
-        session("u1", "loops", 0, "Easy", 100),
+        session("u1", "loops", 30, "Advanced", 0),
+        session("u1", "loops", 0, "Beginner", 100),
     ]
     frame = build_rows(rows)
     assert len(frame) == 1
@@ -161,30 +161,30 @@ def test_sessions_are_ordered_by_time_not_insertion():
 
 def test_history_does_not_cross_concepts_or_students():
     rows = [
-        session("u1", "loops", 0, "Easy", 100),
-        session("u1", "arrays", 10, "Easy", 100),
-        session("u2", "loops", 20, "Easy", 100),
+        session("u1", "loops", 0, "Beginner", 100),
+        session("u1", "arrays", 10, "Beginner", 100),
+        session("u2", "loops", 20, "Beginner", 100),
     ]
     assert len(build_rows(rows)) == 0
 
 
 def test_difficulty_is_an_input_not_the_label():
     rows = [
-        session("u1", "loops", 0, "Easy", 90),
-        session("u1", "loops", 10, "Hard", 90),
+        session("u1", "loops", 0, "Beginner", 90),
+        session("u1", "loops", 10, "Advanced", 90),
     ]
     frame = build_rows(rows)
     assert "difficulty_ordinal" in FEATURE_COLUMNS
     assert "difficulty_ordinal" not in HISTORY_FEATURES
-    assert frame.iloc[0]["difficulty_ordinal"] == DIFFICULTY_ORDINAL["Hard"]
+    assert frame.iloc[0]["difficulty_ordinal"] == DIFFICULTY_ORDINAL["Advanced"]
     assert "success" not in FEATURE_COLUMNS
 
 
 def test_success_threshold():
     rows = [
-        session("u1", "loops", 0, "Easy", 100),
-        session("u1", "loops", 10, "Easy", SUCCESS_SCORE),
-        session("u1", "loops", 20, "Easy", SUCCESS_SCORE - 1),
+        session("u1", "loops", 0, "Beginner", 100),
+        session("u1", "loops", 10, "Beginner", SUCCESS_SCORE),
+        session("u1", "loops", 20, "Beginner", SUCCESS_SCORE - 1),
     ]
     frame = build_rows(rows).sort_values("games_played").reset_index(drop=True)
     assert list(frame["success"]) == [1, 0]
@@ -192,10 +192,10 @@ def test_success_threshold():
 
 def test_rows_with_unusable_fields_are_skipped():
     rows = [
-        session("u1", "loops", 0, "Easy", 100),
-        {**session("u1", "loops", 10, "Easy", 50), "completedAt": None},
-        {**session("u1", "loops", 20, "Easy", 50), "difficultyLevel": "Impossible"},
-        session("u1", "loops", 30, "Medium", 50),
+        session("u1", "loops", 0, "Beginner", 100),
+        {**session("u1", "loops", 10, "Beginner", 50), "completedAt": None},
+        {**session("u1", "loops", 20, "Beginner", 50), "difficultyLevel": "Impossible"},
+        session("u1", "loops", 30, "Intermediate", 50),
     ]
     frame = build_rows(rows)
     assert len(frame) == 1
@@ -220,8 +220,8 @@ def test_classify_source(doc, expected):
 
 def test_exploratory_flag_is_carried_onto_the_row():
     rows = [
-        session("u1", "loops", 0, "Easy", 100),
-        session("u1", "loops", 10, "Hard", 50, wasExploratory=True),
+        session("u1", "loops", 0, "Beginner", 100),
+        session("u1", "loops", 10, "Advanced", 50, wasExploratory=True),
     ]
     assert bool(build_rows(rows).iloc[0]["was_exploratory"]) is True
 
@@ -236,7 +236,7 @@ def _sufficient_frame():
                     f"u{user_index}",
                     "loops",
                     index * 10,
-                    ["Easy", "Medium", "Hard"][index % 3],
+                    ["Beginner", "Intermediate", "Advanced"][index % 3],
                     100 if (user_index + index) % 3 else 10,
                 )
             )
@@ -261,16 +261,43 @@ def test_gate_rejects_a_single_outcome():
 def test_gate_rejects_a_single_difficulty():
     """The effect of difficulty is the entire model. One level cannot show it."""
     frame = _sufficient_frame()
-    frame["difficulty_ordinal"] = DIFFICULTY_ORDINAL["Medium"]
+    frame["difficulty_ordinal"] = DIFFICULTY_ORDINAL["Intermediate"]
     reasons = check_sufficiency(frame)
     assert any("one difficulty" in reason for reason in reasons)
 
 
 def test_gate_rejects_too_few_students():
     rows = [
-        session("u1", "loops", index * 10, ["Easy", "Medium", "Hard"][index % 3],
+        session("u1", "loops", index * 10, ["Beginner", "Intermediate", "Advanced"][index % 3],
                 100 if index % 2 else 10)
         for index in range(200)
     ]
     reasons = check_sufficiency(build_rows(rows))
     assert any("distinct students" in reason for reason in reasons)
+
+
+def test_sessions_written_under_the_old_three_level_scale_are_kept():
+    """Easy/Medium/Hard rows are the only real history that exists.
+
+    Dropping them to avoid a rename would discard the corpus to protect a
+    vocabulary. They are mapped onto the five-level ladder instead - see
+    LEGACY_DIFFICULTY - so a model can still be fitted on everything recorded
+    before the change.
+    """
+    frame = build_rows([
+        session("u1", "loops", 0, "Easy", 100),
+        session("u1", "loops", 10, "Hard", 90),
+    ])
+
+    assert len(frame) == 1
+    assert frame.iloc[0]["difficulty_ordinal"] == DIFFICULTY_ORDINAL["Advanced"]
+
+
+def test_an_unknown_difficulty_is_still_dropped():
+    """The legacy mapping must not become a catch-all that accepts anything."""
+    frame = build_rows([
+        session("u1", "loops", 0, "Beginner", 100),
+        {**session("u1", "loops", 10, "Beginner", 50), "difficultyLevel": "Impossible"},
+    ])
+
+    assert len(frame) == 0, "a level on neither the ladder nor the legacy map is not a row"

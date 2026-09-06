@@ -27,7 +27,7 @@ from dotenv import load_dotenv as _load_dotenv
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
-from training_data import DIFFICULTY_ORDINAL, HISTORY_FEATURES
+from training_data import DIFFICULTY_ORDINAL, HISTORY_FEATURES, LEGACY_DIFFICULTY
 
 app = Flask(__name__)
 CORS(app)
@@ -51,6 +51,7 @@ _load_dotenv(os.path.join(os.path.dirname(HERE), ".env"), override=False)
 # place, instead of inside a model's weights.
 TARGET_SUCCESS_FLOOR = float(os.environ.get("TARGET_SUCCESS_FLOOR", "0.70"))
 
+# Easiest to hardest. The order matters wherever the policy walks it.
 DIFFICULTIES = sorted(DIFFICULTY_ORDINAL, key=DIFFICULTY_ORDINAL.get)
 
 
@@ -147,6 +148,29 @@ def predict():
             422,
         )
 
+    # Which levels to score.
+    #
+    # The caller may send `candidates` - the band the progression rule permits
+    # (see the backend's services/progressionService.js). Scoring only those is
+    # the point: FR-08 asks that a student move one level at a time on two
+    # consecutive sessions, and a model free to answer "Expert" for a Beginner
+    # would make that guarantee meaningless. Absent the field, every level is
+    # scored, which is what a caller asking "how would this student do at each"
+    # wants.
+    candidates = data.get("candidates") or DIFFICULTIES
+    candidates = [level for level in DIFFICULTIES if level in set(candidates)]
+
+    if not candidates:
+        return (
+            jsonify(
+                {
+                    "error": "No scoreable difficulty in `candidates`.",
+                    "detail": f"Known levels are {', '.join(DIFFICULTIES)}.",
+                }
+            ),
+            400,
+        )
+
     try:
         rows = pd.DataFrame(
             [
@@ -154,7 +178,7 @@ def predict():
                     **{name: float(data[name]) for name in HISTORY_FEATURES},
                     "difficulty_ordinal": DIFFICULTY_ORDINAL[difficulty],
                 }
-                for difficulty in DIFFICULTIES
+                for difficulty in candidates
             ]
         )[bundle["feature_columns"]]
 
@@ -164,10 +188,25 @@ def predict():
 
     predicted = {
         difficulty: round(float(probability), 4)
-        for difficulty, probability in zip(DIFFICULTIES, probabilities)
+        for difficulty, probability in zip(candidates, probabilities)
     }
 
     chosen, reason = apply_policy(predicted)
+
+    # Levels this model has never been fitted on.
+    #
+    # The corpus moved from three levels to five. A model fitted before that saw
+    # difficulty_ordinal in {0, 1, 2}; asked about 3 or 4 it does not fail, it
+    # extrapolates - a Random Forest simply reuses its highest-seen split, so
+    # Advanced and Expert come back with whatever it learned about Hard.
+    #
+    # That is a prediction the data does not support, and the whole point of the
+    # model card is that this service says so rather than answering confidently.
+    # Reported, not refused: a student still needs a game, and the caller's
+    # progression rule has already decided the band is appropriate.
+    trained_on = set((bundle["card"].get("provenance") or {}).get("by_difficulty") or {})
+    trained_on = {LEGACY_DIFFICULTY.get(level, level) for level in trained_on}
+    extrapolated = [level for level in candidates if trained_on and level not in trained_on]
 
     return jsonify(
         {
@@ -183,23 +222,38 @@ def predict():
             "conceptTag": data["conceptTag"],
             "model_version": bundle["card"].get("trained_at"),
             "reportable": bool(bundle["card"].get("reportable")),
+            # Empty is the healthy case. Anything listed here was scored by a
+            # model that has never seen that difficulty.
+            "extrapolated_difficulties": extrapolated,
         }
     )
 
 
 def apply_policy(predicted: dict[str, float]) -> tuple[str, str]:
-    """Pick a difficulty from the per-difficulty success probabilities."""
-    for difficulty in reversed(DIFFICULTIES):
+    """Pick a difficulty from the per-difficulty success probabilities.
+
+    Only the levels present in `predicted` are considered. That set is the band
+    the caller permitted, so this walks the dict rather than DIFFICULTIES - a
+    loop over all five would raise KeyError the moment a band excluded one, and
+    "hardest available" means hardest of what was offered.
+    """
+    offered = [level for level in DIFFICULTIES if level in predicted]
+
+    if not offered:
+        raise ValueError("apply_policy called with no scored difficulties")
+
+    for difficulty in reversed(offered):
         if predicted[difficulty] >= TARGET_SUCCESS_FLOOR:
             return difficulty, (
-                f"{difficulty} is the hardest level with predicted success "
+                f"{difficulty} is the hardest offered level with predicted success "
                 f"{predicted[difficulty]:.2f} >= {TARGET_SUCCESS_FLOOR:.2f}"
             )
 
-    easiest = DIFFICULTIES[0]
+    easiest = offered[0]
     return easiest, (
-        f"no level reaches the {TARGET_SUCCESS_FLOOR:.2f} floor "
-        f"(best was {max(predicted.values()):.2f}), so the easiest is served"
+        f"no offered level reaches the {TARGET_SUCCESS_FLOOR:.2f} floor "
+        f"(best was {max(predicted.values()):.2f}), so the easiest of "
+        f"{'/'.join(offered)} is served"
     )
 
 
