@@ -141,7 +141,7 @@ heuristic and the model is future work.
 | FR-11 | Session summary with rationale | **Done** *(fixed today)* | The rationale was the placeholder |
 | FR-12 | Send summary to Progress Tracker | **Partly** | Happens from the *browser*, not this service — see below |
 | FR-13 | WebSocket state sync | **Missing** | Needs FR-03 |
-| FR-14 | Educators view decision logs | **Missing** | No endpoint, and the decisions are never stored |
+| FR-14 | Educators view decision logs | **Dropped** | Requires a non-student role; the platform is deliberately student-only — see §4a |
 | FR-15 | Configure thresholds without code changes | **Partly** | Some are env vars; several are still hardcoded |
 
 | # | Requirement | Status |
@@ -150,9 +150,32 @@ heuristic and the model is future work.
 | NFR-02 | 50 concurrent sessions | **Passes** — 50/50 succeeded, no degradation |
 | NFR-03 | 85% decision accuracy | **Cannot be claimed** (see §3) |
 | NFR-04 | SUS above 68 | Not testable without users |
-| NFR-05 | Access control + TLS | **Partly** — access control is solid; TLS is terminated at the edge proxy, not here |
+| NFR-05 | Access control + TLS | **Partly** — access control is solid and now simply "your own data only"; TLS is terminated at the edge proxy, not here |
 | NFR-06 | No personal data in public APIs | **Passes** — only opaque user ids |
 | NFR-07 | Containerised for horizontal scaling | **Partly** — containerised; scaling never tested |
+
+### 4a. FR-14 is dropped, deliberately
+
+The platform has **no roles**. Every account is a student, and there is no
+concept of an educator, lecturer or administrator anywhere in it.
+
+There used to be the shape of one. Code Coach stamped `"role": "student"` on
+every user, signed it into the JWT, and the gamification engine checked it:
+
+```js
+const isPrivilegedRole = role === 'admin' || role === 'supervisor' || role === 'lecturer';
+```
+
+That branch had never been true and never could be — nothing could create an
+account with any other value — while reading as though privileged access were a
+supported feature. All of it is now gone: the field, the claim, the check, the
+type in the web app's session, the API contract, and the vestigial `role` key on
+the twelve existing user documents.
+
+**This is a scope decision, not an oversight.** Supporting educators properly
+means a second kind of account, a way to create one, an interface built for it,
+and an access-control story to defend — a whole second product surface. FR-14
+should be removed from the proposal rather than left as an unmet requirement.
 
 ### Three of these need explaining in plain English
 

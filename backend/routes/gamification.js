@@ -13,12 +13,23 @@ function getAuthenticatedUserId(req) {
     return req.user?.user_id || req.user?.userId || req.user?.id || req.user?.sub || null;
 }
 
+/**
+ * You may only ever touch your own data.
+ *
+ * This used to grant a bypass to roles named 'admin', 'supervisor' and
+ * 'lecturer'. None of them could exist: Code Coach hardcoded every account to
+ * 'student' and had no path to create anything else - so the branch had never
+ * been true, and never could be, while reading as though privileged access was
+ * a supported feature of the service.
+ *
+ * The platform is now student-only by decision, not by omission. Roles are gone
+ * from Code Coach's user records and from its tokens entirely, so there is no
+ * claim left to bypass with.
+ */
 function assertUserAccess(req, userId) {
     const authenticatedUserId = getAuthenticatedUserId(req);
-    const role = req.user?.role;
-    const isPrivilegedRole = role === 'admin' || role === 'supervisor' || role === 'lecturer';
 
-    return isPrivilegedRole || (authenticatedUserId && authenticatedUserId === userId);
+    return Boolean(authenticatedUserId) && authenticatedUserId === userId;
 }
 
 // ALL routes protected by JWT
