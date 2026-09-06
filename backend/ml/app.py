@@ -23,6 +23,7 @@ import sys
 
 import joblib
 import pandas as pd
+from dotenv import load_dotenv as _load_dotenv
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
@@ -33,6 +34,15 @@ CORS(app)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(HERE, "model.pkl")
+
+# The ML code lives under backend/ and shares that service's configuration -
+# the same database, the same secrets file. There used to be a second .env
+# beside this one; two files describing one component is one more place for the
+# connection string to drift out of step, and it did.
+#
+# Real environment variables always win, so a container that passes them in is
+# unaffected by whether the file exists (it is deliberately not in the image).
+_load_dotenv(os.path.join(os.path.dirname(HERE), ".env"), override=False)
 
 # The success rate a student should be running at. Below this a game is
 # discouraging; well above it there is nothing left to learn. 0.70 sits in the
@@ -247,7 +257,10 @@ if __name__ == "__main__":
     # 5000 is this service's original port and what the team's .env files
     # already point at; it collides with nothing else in the platform
     # (Code Coach 8000, Study Guider 8010, PairPath ml-service 8020).
-    # Configurable via PORT - on macOS, 5000 is taken by AirPlay Receiver.
+    # Configurable via ML_PORT - on macOS, 5000 is taken by AirPlay Receiver.
+    # ML_PORT and not PORT, because backend/.env is now shared with the Node API
+    # and PORT there is 3002. PORT is still honoured second so a container that
+    # sets only that (as compose does) still lands on the right port.
     #
     # debug defaults OFF. It used to be hardcoded True, which turns on the
     # Werkzeug interactive debugger - and that debugger executes arbitrary
@@ -255,4 +268,4 @@ if __name__ == "__main__":
     # authentication of its own, anything able to reach the port would have had
     # a shell. Opt in explicitly for local work with FLASK_DEBUG=1.
     debug = os.environ.get("FLASK_DEBUG", "").lower() in ("1", "true", "yes")
-    app.run(port=int(os.environ.get("PORT", 5000)), debug=debug)
+    app.run(port=int(os.environ.get("ML_PORT") or os.environ.get("PORT") or 5000), debug=debug)

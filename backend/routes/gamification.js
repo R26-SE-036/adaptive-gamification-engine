@@ -6,6 +6,7 @@ const GameSession = require('../models/GameSession');
 const PlayerProfile = require('../models/PlayerProfile');
 const QuestionBank = require('../models/QuestionBank');
 const { predictDifficulty } = require('../services/difficultyService');
+const { recommendNextGame } = require('../services/recommendationService');
 const { CONCEPT_GAME_MAPPING, GAME_TYPES, DIFFICULTY_LEVELS, DIFFICULTY_ALIASES } = require('../config/constants');
 
 function getAuthenticatedUserId(req) {
@@ -340,6 +341,25 @@ router.post('/game/submit', async (req, res) => {
 
         await profile.save();
 
+        // FR-09 and FR-11: what to play next, and the reason for it. Computed
+        // from this student's own sessions - see services/recommendationService.js
+        // for the rule set. Never fails the submission: a student who has just
+        // finished a game must get their score even if the recommendation query
+        // does not come back.
+        let recommendation = null;
+        try {
+            recommendation = await recommendNextGame({
+                userId,
+                conceptTag,
+                lastScore: finalScore
+            });
+        } catch (recommendationError) {
+            console.warn(
+                `[gamification] Could not build a next-game recommendation for ` +
+                    `user=${userId} concept=${conceptTag}: ${recommendationError.message}`
+            );
+        }
+
         const conceptLabel = conceptTag.replace(/_/g, ' ');
         const masteredThisRound = finalScore >= 80;
         const attemptOutcome = masteredThisRound ? 'concept_progressed' : 'practice_recommended';
@@ -352,14 +372,23 @@ router.post('/game/submit', async (req, res) => {
             attemptOutcome,
             learnerFeedback,
             conceptProgressMessage: learnerFeedback,
-            nextPracticeRecommendation: `${gameType} on ${conceptLabel}`,
+            // effectiveGameType, not the client's `gameType`: everything else in
+            // this handler already refuses to take the client's word for it, and
+            // echoing it back here made the summary disagree with the session
+            // that was just written.
+            nextPracticeRecommendation: `${effectiveGameType} on ${conceptLabel}`,
             answerMatchedReference: isCorrect,
             referenceAnswer: question.correctAnswer,
             correctAnswer: question.correctAnswer,
             explanation: question.explanation,
             newBadges: newBadgesUnlocked,
             currentStreak: profile.currentStreak,
-            nextRecommendedGame: 'Optional: further recommendation logic'
+            // Was the string 'Optional: further recommendation logic', sent to
+            // the client on every completed game. FR-09 in full is now below.
+            nextRecommendedGame: recommendation ? recommendation.gameType : null,
+            nextRecommendedConcept: recommendation ? recommendation.conceptTag : null,
+            nextRecommendationReason: recommendation ? recommendation.reason : null,
+            nextRecommendationRule: recommendation ? recommendation.rule : null
         });
     } catch (err) {
         console.error(err);

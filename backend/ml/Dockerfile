@@ -1,6 +1,6 @@
 # Adaptive Gamification - ML service (difficulty prediction).
 #
-# Build from the ml-service directory:
+# Build from the backend/ml directory:
 #   docker build -t gamification-ml .
 #   docker run --rm -p 5000:5000 gamification-ml
 #

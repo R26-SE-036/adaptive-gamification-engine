@@ -28,11 +28,13 @@ const { CODE_COACH_URL } = require('./services/codeCoachClient');
 
 const app = express();
 
-// Browsers that may call this API. The frontend dev server is 5174 and the
-// Code Guru portal is 4200. Comes from the environment so a deployed origin can
-// be added without a code change.
+// Browsers that may call this API. Only the Code Guru web app on 4200 - this
+// component's own Vite frontend on 5174 has been removed, and leaving a deleted
+// app's origin on the allow-list grants it to whatever binds that port next.
+// Comes from the environment so a deployed origin can be added without a code
+// change.
 const allowedOrigins = (process.env.CORS_ORIGINS ||
-    'http://localhost:5174,http://127.0.0.1:5174,http://localhost:4200,http://127.0.0.1:4200')
+    'http://localhost:4200,http://127.0.0.1:4200')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);

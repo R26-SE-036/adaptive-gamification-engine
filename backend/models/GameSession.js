@@ -37,7 +37,7 @@ const GameSessionSchema = new mongoose.Schema({
 
     // Where this row came from. 'real' is a person playing; 'simulated' is
     // backend/data/simulate_students.js; 'test' is manual API poking.
-    // ml-service/training_data.py drops everything that is not 'real' before
+    // backend/ml/training_data.py drops everything that is not 'real' before
     // fitting, so a seeded database cannot silently become a research result.
     dataSource: { type: String, enum: ['real', 'simulated', 'test'], default: 'real', index: true },
 

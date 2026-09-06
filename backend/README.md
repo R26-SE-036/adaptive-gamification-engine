@@ -14,12 +14,15 @@ verified by calling Code Coach.
 |---|---|---|
 | Code Coach API | `8000` | Identity provider; struggle signals; game recommendations |
 | **Gamification backend** | `3002` | Question bank, grading, player profile, difficulty selection |
-| **Gamification ML service** | `5000` | Random Forest difficulty prediction (Flask) |
-| Gamification frontend | `5174` | Dashboard and game UI |
+| **Gamification ML service** | `5000` | Random Forest difficulty prediction (Flask), in `backend/ml` |
+| Code Guru web app | `4200` | The one UI for the whole platform |
 
-Ports are not arbitrary: `3000` is PairPath's frontend, `3001` its API, `5173`
-Study Guider's frontend, `4200` the portal. Taking one of those breaks whichever
-service starts second.
+This component has no frontend of its own. It had a Vite app on `5174`; the
+platform now has a single Next.js frontend (`codeguru-web`) serving every
+component, so that one was a second UI for the same screens and has been removed.
+
+Ports are not arbitrary: `3000` is PairPath's frontend, `3001` its API, `4200`
+the web app. Taking one of those breaks whichever service starts second.
 
 ## Databases
 
@@ -98,8 +101,10 @@ chosen level, the query falls back to type-only and then concept-only.
 | `MONGODB_URI` | `mongodb://localhost:27017/code-guru` | |
 | `ML_SERVICE_URL` | `http://127.0.0.1:5000` | Falls back to `FLASK_ML_URL`. |
 | `ML_TIMEOUT_MS` | `5000` | |
-| `PORT` | `3002` | |
-| `CORS_ORIGINS` | `5174` and `4200` origins | Browsers only; server-to-server is unaffected. |
+| `PORT` | `3002` | The Node API's port. |
+| `ML_PORT` | `5000` | The Flask service's port. Separate name because both processes read this one file. |
+| `RETRAIN_SECRET` | unset | Guards `POST /retrain`. Unset means the endpoint refuses everyone. |
+| `CORS_ORIGINS` | `4200` origin | Browsers only; server-to-server is unaffected. |
 | `DNS_SERVERS` | unset | Windows-only workaround for `querySrv ECONNREFUSED` on `mongodb+srv://`. |
 
 ## Running it
@@ -113,7 +118,7 @@ uvicorn app.main:app --reload --port 8000
 
 ```bash
 # terminal 2 - ML service
-cd ml-service && pip install -r requirements.txt && python app.py
+cd backend/ml && pip install -r requirements.txt && python app.py
 ```
 
 ```bash
@@ -121,25 +126,27 @@ cd ml-service && pip install -r requirements.txt && python app.py
 cd backend && npm install && npm start
 ```
 
-```bash
-# terminal 4 - frontend
-cd frontend && npm install && npm run dev
-```
-
-Then open `http://localhost:5174` and sign in with a real Code Coach account.
+Then start `codeguru-web` (`npm run dev`, port 4200) and sign in with a real
+Code Coach account. The games are under **Practice**.
 
 ## The difficulty model
 
-`ml-service/model.pkl` is a scikit-learn `RandomForestClassifier`
-(`n_estimators=100, max_depth=4, random_state=42`) over six features, in this
-order: `avg_score`, `avg_attempts`, `avg_hint_usage`, `avg_time_seconds`,
-`repeat_error_count`, `games_played`.
+`backend/ml/model.pkl` is a scikit-learn `RandomForestClassifier`
+(`n_estimators=100, max_depth=4, random_state=42`) over the seven history
+features in `ml/training_data.py` — `games_played`, `avg_score`, `avg_attempts`,
+`avg_hint_usage`, `avg_time_seconds`, `recent_score`, `success_rate` — plus
+`difficulty_ordinal`, the difficulty being scored.
+
+It predicts P(success | history, difficulty), not the difficulty itself. The
+earlier version took `repeat_error_count` and `games_played` — both derived from
+`difficultyLevel` — and then predicted `difficultyLevel`, so it was recovering an
+if/else from its own inputs. See `ml/training_data.py` for the full account.
 
 It is **committed**, deliberately. While it was gitignored it never reached a
 checkout or an image, `/predict` answered `500 "Model not trained yet"`, and the
 backend silently used the heuristic — so the Random Forest never ran at all.
 
-Retrain from real sessions with `python ml-service/retrain_from_db.py`, which
+Retrain from real sessions with `python backend/ml/retrain_from_db.py`, which
 reads `gameSessions` from Atlas and overwrites `model.pkl`. `POST /retrain` on
 the ML service does the same thing from a request body and is guarded by the
 `X-Retrain-Secret` header.
@@ -155,9 +162,15 @@ the ML service does the same thing from a request body and is guarded by the
 
 ## Deployment
 
-`Dockerfile` here and in `ml-service/`. Neither has been built yet — Docker was
-not running on the machine where they were written, so treat the first build as
-unverified.
+`Dockerfile` here and in `ml/`. Both are built by `codeguru-web/deploy/docker-compose.yml`
+as `gamification-api` and `gamification-ml`.
+
+Two containers, deliberately, even though the ML code now lives under `backend/`.
+They are two runtimes — Node and Python — and on a single-host deployment the
+second container costs about 120 MB of memory and nothing in money; container
+count is not what drives the bill. Separate images mean each keeps its own
+restart policy, logs and health check, and one crashing does not take the other
+down.
 
 The ML service has **no authentication and permissive CORS by design**, on the
 assumption this backend sits in front of it. It must go in a private subnet

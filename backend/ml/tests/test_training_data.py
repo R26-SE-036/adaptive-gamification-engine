@@ -6,7 +6,7 @@ predicted `difficultyLevel`, so a depth-1 tree scored 100% and nothing in the
 codebase would have noticed. `test_no_feature_determines_the_label` is the one
 that would have caught it.
 
-Run:  python -m pytest tests/ -q      (from ml-service/)
+Run:  python -m pytest tests/ -q      (from backend/ml/)
 """
 
 from __future__ import annotations

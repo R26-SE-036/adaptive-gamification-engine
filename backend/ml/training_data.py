@@ -269,19 +269,30 @@ def provenance_summary(frame: pd.DataFrame) -> dict:
 
 
 def load_sessions_from_mongo() -> list[dict]:
-    """Every game session, raw. Connection details come from backend/.env."""
+    """Every game session, raw.
+
+    The connection string comes from the environment, and falls back to the
+    backend's .env one directory up when it is not already set. That fallback is
+    for running the trainer by hand from a checkout; in a container the file is
+    not there (it is not in the image, and should not be) so MONGODB_URI has to
+    be passed in - which is why the compose service declares it.
+    """
     import certifi
     from dotenv import load_dotenv
     from pymongo import MongoClient
 
-    backend_env = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend", ".env"
-    )
-    load_dotenv(backend_env)
+    if not os.environ.get("MONGODB_URI"):
+        backend_env = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"
+        )
+        load_dotenv(backend_env)
 
     uri = os.environ.get("MONGODB_URI")
     if not uri:
-        raise SystemExit("MONGODB_URI is not set. Check backend/.env.")
+        raise SystemExit(
+            "MONGODB_URI is not set. Set it in the environment, or in "
+            "backend/.env when running the trainer from a checkout."
+        )
 
     client = MongoClient(uri, tlsCAFile=certifi.where(), serverSelectionTimeoutMS=15000)
     database = client[os.environ.get("MONGODB_DB_NAME", "code-guru")]

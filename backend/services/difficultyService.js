@@ -19,7 +19,7 @@
  *
  * ======================= AND WHY IT WAS REWRITTEN AGAIN =======================
  * Once the model did run, it was answering the wrong question with leaked
- * features. `ml-service/training_data.py` has the full account; the part that
+ * features. `ml/training_data.py` has the full account; the part that
  * shows up here is that this file used to send `games_played` — the real number
  * of past sessions, 0 for a newcomer and rising with use — to a model trained
  * where games_played=1 meant Easy and 4 meant Hard. The engine pushed a student
@@ -64,7 +64,7 @@ const EXPLORATION_RATE = Number(
 const DIFFICULTIES = ['Easy', 'Medium', 'Hard'];
 
 /**
- * The history features, in the order ml-service/training_data.py lists them.
+ * The history features, in the order ml/training_data.py lists them.
  * Named here so a change on either side shows up as a change to this list —
  * a model served different features than it was trained on does not fail, it
  * just quietly gets worse.
@@ -79,7 +79,7 @@ const FEATURE_NAMES = [
     'success_rate'
 ];
 
-/** Matches SUCCESS_SCORE in ml-service/training_data.py. */
+/** Matches SUCCESS_SCORE in ml/training_data.py. */
 const SUCCESS_SCORE = Number(process.env.SUCCESS_SCORE || 70);
 
 /**
@@ -177,8 +177,17 @@ function heuristicDifficulty(features, repeatErrorCount = 0) {
  *   documents impossible to reintroduce unnoticed.
  */
 async function predictDifficulty({ userId, conceptTag, accessToken }) {
-    const features = await buildFeatures({ userId, conceptTag });
-    const repeatErrorCount = await fetchRepeatErrorCount({ conceptTag, accessToken });
+    // In parallel, because they are independent and both are remote: the
+    // features come from MongoDB Atlas and the struggle count from Code Coach.
+    // Awaited one after the other they cost the sum of two round trips, which on
+    // a measured run was 123ms + 556ms against an NFR-01 budget of 200ms for the
+    // whole decision. Overlapping them does not meet that budget on its own -
+    // see docs/proposal-gap-analysis.md - but paying for the slower call twice
+    // was pure waste.
+    const [features, repeatErrorCount] = await Promise.all([
+        buildFeatures({ userId, conceptTag }),
+        fetchRepeatErrorCount({ conceptTag, accessToken })
+    ]);
 
     // ── Cold start ────────────────────────────────────────────────────────────
     if (features.games_played === 0) {

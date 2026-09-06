@@ -13,7 +13,7 @@
  * if/else below.
  *
  * That is no longer possible by accident. Every row written here is stamped
- * `dataSource: 'simulated'`, and ml-service/training_data.py drops anything
+ * `dataSource: 'simulated'`, and ml/training_data.py drops anything
  * that is not 'real' before fitting. retrain_from_db.py no longer describes
  * these as "authentic human game sessions" either - it reports what the
  * corpus is made of and refuses outright when there is not enough of it.
