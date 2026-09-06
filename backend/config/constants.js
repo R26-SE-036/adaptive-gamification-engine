@@ -61,25 +61,22 @@ const DIFFICULTY_ALIASES = {
     hard: 'Hard'
 };
 
-const DIAGNOSTIC_STATUSES = ['active', 'resolved', 'repeated', 'ignored'];
 const GAME_SESSION_STATUSES = ['started', 'completed', 'abandoned'];
 
-const LEARNING_EVENT_TYPES = [
-    'code_diagnostic_detected',
-    'hint_shown',
-    'diagnostic_resolved',
-    'struggle_signal_created',
-    'game_session_created',
-    'game_session_completed',
-    'pair_session_started',
-    'peer_review_submitted',
-    'micro_lesson_triggered',
-    'quiz_completed',
-    'mastery_updated',
-    'diagnostic_re_evaluation'
-];
-
-const SOURCE_COMPONENT = 'gamification';
+// DIAGNOSTIC_STATUSES, LEARNING_EVENT_TYPES and SOURCE_COMPONENT were here.
+//
+// All three were exported and read by nothing. They described a shared-database
+// era when this service wrote LearningEvent rows alongside Code Coach's own; that
+// write was removed as a write-only mirror of a Code Coach concept, and the
+// vocabulary outlived it.
+//
+// LEARNING_EVENT_TYPES is also where the last trace of the Pair Challenge game
+// lived - it listed 'pair_session_started' and 'peer_review_submitted' as valid
+// events. Nothing ever emitted either. The engine is single-player.
+//
+// Note that PairPath, the platform's separate pairing component, is unrelated to
+// any of this and is untouched; the port comments elsewhere that mention it are
+// about avoiding a collision with it, not about a game here.
 
 // Strict Game-Type Mapping per Concept Tag
 const CONCEPT_GAME_MAPPING = {
@@ -105,9 +102,6 @@ module.exports = {
     ERROR_TYPES,
     DIFFICULTY_LEVELS,
     DIFFICULTY_ALIASES,
-    DIAGNOSTIC_STATUSES,
     GAME_SESSION_STATUSES,
-    LEARNING_EVENT_TYPES,
-    SOURCE_COMPONENT,
     CONCEPT_GAME_MAPPING
 };
