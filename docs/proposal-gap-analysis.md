@@ -254,6 +254,15 @@ failure**, and re-measured honestly if it still fails.
 6. **Dead rules.** My first draft of the recommendation engine had two rules that
    could never fire, for the `CONCEPT_GAME_MAPPING` reason in §4. Removed rather
    than shipped.
+7. **The session simulator could never have worked.** It read a 47-question JSON
+   snapshot whose ids were `q001`, `q002`… while the deployed bank holds 75
+   questions with ids like `q_off_by_one_02`. Every id it sent was one the
+   grader had never heard of, so `POST /game/submit` answered `404 Question not
+   found` for all 47 — it could not write a single session. It now reads the
+   bank from the database, so re-seeding the questions cannot leave it behind.
+   Its wrong answers were also always the number `2`, which is not a valid
+   wrong answer for a Drag & Drop question (an array) or a Code Trace one (a
+   string); they are now shaped to match each question's answer.
 
 ## 7. Files removed
 

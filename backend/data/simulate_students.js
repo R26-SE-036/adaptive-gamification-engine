@@ -24,8 +24,11 @@
  */
 
 const axios = require('axios');
-const fs = require('fs');
 const path = require('path');
+const mongoose = require('mongoose');
+require('dotenv').config({ path: path.join(__dirname, '../.env') });
+
+const QuestionBank = require('../models/QuestionBank');
 
 // 3002, not 3000 - 3000 is PairPath's frontend. This pointed at the wrong
 // service, so every request went to something that had never heard of it.
@@ -45,12 +48,43 @@ if (!ACCESS_TOKEN) {
     process.exit(1);
 }
 
-// questions_seed.json. There is no questions.json and there never was, so this
-// threw ENOENT before it reached a single request.
-const questionsPath = path.join(__dirname, 'questions_seed.json');
-const questions = JSON.parse(fs.readFileSync(questionsPath, 'utf8'));
+/**
+ * The questions come from the DATABASE, not from a file beside this script.
+ *
+ * This used to read data/questions_seed.json - a 47-question snapshot whose ids
+ * were q001, q002, ... The bank actually deployed holds 75 questions with ids
+ * like q_off_by_one_02, seeded by seed_75_questions.js. So every id this script
+ * sent was one the grader had never heard of, and POST /game/submit answered
+ * `404 Question not found in database` for all 47. It could not have written a
+ * single session against the current bank.
+ *
+ * Reading the bank the service actually grades against is the only version of
+ * this that cannot drift: re-seed the questions and the simulator follows.
+ */
+async function loadQuestions() {
+    await mongoose.connect(process.env.MONGODB_URI);
+    const questions = await QuestionBank.find({}).lean();
+
+    if (questions.length === 0) {
+        console.error('The question bank is empty. Run: node data/seed_75_questions.js');
+        await mongoose.disconnect();
+        process.exit(1);
+    }
+
+    return questions;
+}
+
+/** A definitely-wrong answer of the same shape as this question's correct one. */
+function wrongAnswerFor(question) {
+    const answer = question.correctAnswer;
+
+    if (Array.isArray(answer)) return [...answer].reverse().concat('x');
+    if (typeof answer === 'number') return answer + 1;
+    return `not-${answer}`;
+}
 
 const simulate = async () => {
+    const questions = await loadQuestions();
     let count = 0;
     
     // Simulating 5 distinct novice students
@@ -82,7 +116,13 @@ const simulate = async () => {
             timeTakenSeconds = Math.floor(Math.random() * 60) + 90; // 90-150s
             // Rarely skip the fallback check, make them get it wrong to simulate total failure
             if (Math.random() > 0.85) {
-                selectedAnswer = q.correctAnswer === 1 ? 2 : 1;
+                // Wrong in a way that fits this question's answer shape. The old
+                // `q.correctAnswer === 1 ? 2 : 1` produced the number 2 for a
+                // DragDrop question whose answer is an array and for a CodeTrace
+                // whose answer is a string - which the grader marks wrong, but
+                // for the wrong reason, and would have been silently "correct"
+                // had the real answer ever been the number 2.
+                selectedAnswer = wrongAnswerFor(q);
             }
         }
 
@@ -116,6 +156,11 @@ const simulate = async () => {
     // than a hardcoded 45, which stopped matching the bank several seeds ago.
     console.log(`\nSeeded ${count}/${questions.length} GENERATED game sessions into MongoDB.`);
     console.log('These are not student data. Do not train a reported model on them - see the header.');
+
+    await mongoose.disconnect();
 };
 
-simulate();
+simulate().catch((error) => {
+    console.error(error.message);
+    process.exit(1);
+});
