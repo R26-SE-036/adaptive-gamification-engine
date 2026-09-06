@@ -165,6 +165,31 @@ Typed answers are marked by `services/gradingService.js`: whitespace outside
 string literals is insignificant, everything else is significant, and a question
 may list several accepted forms of the same fix. `npm test` covers it.
 
+## Hints and support
+
+Hints are **not** in the question payload. It carries `hintCount` only; each
+hint comes from `POST /game/hint`, which hands over the next one the student has
+not seen and records it. That is what makes `hintUsage` a measurement: it used
+to be a number the client reported about itself while the score charged 15
+points per hint, so all three could be read from the network tab for free.
+
+Asking twice for the same hint returns it without counting it again — a page
+refresh must not cost 15 points. `/game/check` reports how many hints remain but
+never hands one over: a student is not billed for a hint they did not ask for.
+
+`services/supportService.js` decides what a student needs beyond another round:
+
+| action | when |
+|---|---|
+| `review_lesson` | 3 failures in a row, or unresolved Code Coach findings on the concept |
+| `extra_practice` | the difficulty rule just dropped them a level |
+| `slow_down` | passing, but averaging more than 1.5 hints a round |
+| `keep_going` | nothing is wrong |
+
+Every one carries the evidence it fired on, so a recommendation can be argued
+with rather than just obeyed. Thresholds are env-configurable
+(`SUPPORT_FAILURES_BEFORE_LESSON`, `SUPPORT_HINT_DEPENDENCE`, `SUPPORT_WINDOW`).
+
 ## Choosing the format
 
 The four games differ in what they ask a student to do, and those demands are

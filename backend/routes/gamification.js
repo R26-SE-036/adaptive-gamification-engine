@@ -10,6 +10,7 @@ const { predictDifficulty } = require('../services/difficultyService');
 const { recommendNextGame } = require('../services/recommendationService');
 const { gradeAnswer } = require('../services/gradingService');
 const { chooseGameType } = require('../services/gameTypeService');
+const { recommendSupport } = require('../services/supportService');
 const { CONCEPT_GAME_MAPPING, GAME_TYPES, DIFFICULTY_LEVELS, DIFFICULTY_ALIASES } = require('../config/constants');
 
 function getAuthenticatedUserId(req) {
@@ -179,10 +180,20 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
         // Return a random match
         const selected = questions[0];
         
-        // Strip sensitive info before sending to client
+        // Strip everything the student is meant to earn rather than receive.
+        //
+        // `hints` used to be shipped with the question. Every hint was therefore
+        // free: a student could read all three in the network tab and still be
+        // recorded as having used none, while the score - 100 minus 15 per hint
+        // - was computed from a count the client sent about itself. They come
+        // one at a time from POST /game/hint now, and that endpoint records each
+        // one. Only the COUNT is sent, so the UI can say "3 hints available"
+        // without giving them away.
         const safeQuestion = { ...selected };
         delete safeQuestion.correctAnswer;
         delete safeQuestion.explanation;
+        safeQuestion.hintCount = (selected.hints ?? []).length;
+        delete safeQuestion.hints;
 
         // Say which engine chose the difficulty. A UI that tells a student their
         // practice is adapting to them should be able to tell whether it truly
@@ -229,8 +240,8 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
 //
 // Deliberately does NOT reveal the correct answer on a wrong attempt: unlimited
 // checking would otherwise be a way to read the answer out of the API one guess
-// at a time. It returns the next hint instead, which is the support FR-10 asks
-// for and costs the student score.
+// at a time. It reports how many hints are still available; taking one is a
+// separate, recorded, scored request to POST /game/hint.
 router.post('/game/check', async (req, res) => {
     try {
         const { userId, learningSessionId, questionId, attempt } = req.body;
@@ -270,21 +281,101 @@ router.post('/game/check', async (req, res) => {
         const attempts = updated?.attempts ?? [];
         const wrongSoFar = attempts.filter((entry) => !entry.correct).length;
 
-        // One hint per wrong attempt, in order, then no more. The hints are
-        // already on the question and were only ever handed over in full.
-        const hints = question.hints ?? [];
-        const hint = correct ? null : hints[Math.min(wrongSoFar - 1, hints.length - 1)] ?? null;
+        // No hint is handed over here, only the fact that one is available.
+        //
+        // This used to auto-reveal the next hint on every wrong attempt. That
+        // was right while hints were free and already in the payload; it is
+        // wrong now that POST /game/hint records each one and the score charges
+        // 15 points for it. A student must not be billed for a hint they did
+        // not ask for - and being told one is there is itself the support FR-10
+        // describes, without spending anything on their behalf.
+        const hintsAvailable = (question.hints ?? []).length;
+        const takenSoFar = (updated?.hintsTaken ?? []).length;
 
         return res.json({
             correct,
             attemptNumber: attempts.length,
             wrongAttempts: wrongSoFar,
-            hint,
-            hintsRemaining: correct ? 0 : Math.max(0, hints.length - wrongSoFar)
+            hintsRemaining: Math.max(0, hintsAvailable - takenSoFar)
         });
     } catch (err) {
         console.error(err);
         res.status(500).json({ error: 'Failed to check the answer' });
+    }
+});
+
+// POST /api/v1/gamification/game/hint
+//
+// Hand over the next hint, and record that it was taken.
+//
+// FR-10 asks the system to "provide hints ... when student performance
+// indicators suggest difficulty". Hints existed, but they arrived inside the
+// question payload, so taking one cost nothing and the engine could not tell a
+// student who used three from one who used none. `hintUsage` came from the
+// client, which made the score a number the client chose.
+//
+// Hints are ordered easiest-to-most-explicit on the question, so this always
+// returns the NEXT one the student has not seen. Asking again for one already
+// taken returns it without counting it twice - a page refresh must not cost 15
+// points.
+router.post('/game/hint', async (req, res) => {
+    try {
+        const { userId, learningSessionId, questionId } = req.body;
+
+        if (!userId || !learningSessionId || !questionId) {
+            return res.status(400).json({
+                error: 'userId, learningSessionId and questionId are required'
+            });
+        }
+
+        if (!assertUserAccess(req, userId)) {
+            return res.status(403).json({ error: 'Forbidden: cannot take a hint for another user' });
+        }
+
+        const question = await QuestionBank.findOne({ id: questionId }).lean();
+        if (!question) {
+            return res.status(404).json({ error: 'Question not found in database' });
+        }
+
+        const hints = question.hints ?? [];
+        if (hints.length === 0) {
+            return res.json({ hint: null, hintsTaken: 0, hintsRemaining: 0 });
+        }
+
+        const existing = await GameAttempt.findOne({
+            userId,
+            learningSessionId,
+            questionId
+        }).lean();
+
+        const takenSoFar = (existing?.hintsTaken ?? []).length;
+
+        if (takenSoFar >= hints.length) {
+            // All of them already. Return the last rather than an error: the
+            // student has paid for it and asking twice should not be a failure.
+            return res.json({
+                hint: hints[hints.length - 1],
+                hintsTaken: takenSoFar,
+                hintsRemaining: 0
+            });
+        }
+
+        const updated = await GameAttempt.findOneAndUpdate(
+            { userId, learningSessionId, questionId },
+            { $push: { hintsTaken: { index: takenSoFar } } },
+            { new: true, upsert: true, setDefaultsOnInsert: true }
+        ).lean();
+
+        const taken = (updated?.hintsTaken ?? []).length;
+
+        return res.json({
+            hint: hints[takenSoFar],
+            hintsTaken: taken,
+            hintsRemaining: Math.max(0, hints.length - taken)
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to fetch a hint' });
     }
 });
 
@@ -349,6 +440,13 @@ router.post('/game/submit', async (req, res) => {
         const measuredErrors = gradedAttempts.filter((attempt) => !attempt.correct).length;
         const measured = gradedAttempts.length > 0;
 
+        // Hints are counted the same way and for the same reason: the server
+        // handed them out, so the server knows. The client's `hintUsage` is used
+        // only when no hint was taken through the API at all, which covers a
+        // client written before /game/hint existed.
+        const takenHints = (graded?.hintsTaken ?? []).length;
+        const hintsMeasured = takenHints > 0 || measured;
+
         const normalizedAttemptCount = Number(attemptCount);
         const normalizedHintUsage = Number(hintUsage);
         const normalizedTimeTaken = Number(timeTakenSeconds);
@@ -360,7 +458,10 @@ router.post('/game/submit', async (req, res) => {
 
         // Score calculation: 100 - (hintUsage x 15) - ((attemptCount - 1) x 10)
         // Ensure negative score does not happen
-        let rawScore = 100 - (computedHintUsage * 15) - ((computedAttemptCount - 1) * 10);
+        // The hint count the score is charged for is the server's, not the
+        // client's - see the note beside `takenHints`.
+        const chargedHints = hintsMeasured ? takenHints : computedHintUsage;
+        let rawScore = 100 - (chargedHints * 15) - ((computedAttemptCount - 1) * 10);
         if (!isCorrect) rawScore = 0; // if final submission is wrong
         const finalScore = Math.max(0, rawScore);
 
@@ -383,7 +484,8 @@ router.post('/game/submit', async (req, res) => {
             errorCount: measured ? measuredErrors : (isCorrect ? 0 : 1),
             errorCountMeasured: measured,
             attemptCount: computedAttemptCount,
-            hintUsage: computedHintUsage,
+            hintUsage: hintsMeasured ? takenHints : computedHintUsage,
+            hintUsageMeasured: hintsMeasured,
             timeTakenSeconds: computedTimeTaken,
             traceAccuracy: Number.isFinite(traceAccuracy) ? traceAccuracy : undefined,
             status: 'completed',
@@ -475,12 +577,38 @@ router.post('/game/submit', async (req, res) => {
             );
         }
 
+        // FR-10: what this student needs beyond another round. Never fails the
+        // submission - a student who has just played must get their score even
+        // if the support query does not come back.
+        let support = null;
+        try {
+            support = await recommendSupport({
+                userId,
+                conceptTag,
+                lastScore: finalScore,
+                repeatErrorCount: null
+            });
+        } catch (supportError) {
+            console.warn(
+                `[gamification] Could not build a support recommendation for ` +
+                    `user=${userId} concept=${conceptTag}: ${supportError.message}`
+            );
+        }
+
         const conceptLabel = conceptTag.replace(/_/g, ' ');
         const masteredThisRound = finalScore >= 80;
         const attemptOutcome = masteredThisRound ? 'concept_progressed' : 'practice_recommended';
-        const learnerFeedback = masteredThisRound
-            ? `Great progress in ${conceptLabel}. Keep practicing to strengthen fluency.`
-            : `Good effort on ${conceptLabel}. Try one more guided practice round with hints.`;
+
+        // The support headline, always. It used to be one of two fixed sentences
+        // chosen by `masteredThisRound` (>= 80), while support judges passing at
+        // the platform pass mark (>= 70) - so a round scoring 70-79 was told
+        // "one more round should settle it" underneath a support line saying it
+        // was going well. One source for the message, one threshold.
+        const learnerFeedback = support
+            ? support.headline
+            : masteredThisRound
+              ? `Great progress in ${conceptLabel}. Keep practicing to strengthen fluency.`
+              : `Good effort on ${conceptLabel}. One more round should settle it.`;
 
         res.json({
             score: finalScore,
@@ -503,7 +631,19 @@ router.post('/game/submit', async (req, res) => {
             nextRecommendedGame: recommendation ? recommendation.gameType : null,
             nextRecommendedConcept: recommendation ? recommendation.conceptTag : null,
             nextRecommendationReason: recommendation ? recommendation.reason : null,
-            nextRecommendationRule: recommendation ? recommendation.rule : null
+            nextRecommendationRule: recommendation ? recommendation.rule : null,
+
+            // FR-10. `action` is the contract; the headline and detail are what
+            // a student reads. `evidence` is what the rule actually saw, so a
+            // recommendation can be argued with rather than just obeyed.
+            support: support
+                ? {
+                      action: support.action,
+                      headline: support.headline,
+                      detail: support.detail,
+                      evidence: support.evidence
+                  }
+                : null
         });
     } catch (err) {
         console.error(err);

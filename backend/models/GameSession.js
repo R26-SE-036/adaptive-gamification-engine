@@ -26,7 +26,13 @@ const GameSessionSchema = new mongoose.Schema({
     errorCount: { type: Number, default: 0 },
     errorCountMeasured: { type: Boolean, default: false },
     attemptCount: { type: Number, default: 1 },
+    // Hints taken. Real when hintUsageMeasured is true: the server handed each
+    // one over through POST /game/hint and counted it. False means the client
+    // reported it, which it could previously choose freely - hints shipped
+    // inside the question payload, so all three could be read without the count
+    // ever moving.
     hintUsage: { type: Number, default: 0 },
+    hintUsageMeasured: { type: Boolean, default: false },
     timeTakenSeconds: { type: Number, default: 0 },
     traceAccuracy: { type: Number, min: 0, max: 1 },
     status: { type: String, enum: GAME_SESSION_STATUSES, default: 'completed' },

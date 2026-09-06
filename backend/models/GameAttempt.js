@@ -52,6 +52,22 @@ const GameAttemptSchema = new mongoose.Schema(
             }
         ],
 
+        // How many hints this student has taken on this question, and when.
+        //
+        // Hints used to be shipped inside the question payload, so every one was
+        // free: a student could read all three in the network tab and still be
+        // recorded as having used none. `hintUsage` came from the client, which
+        // made the score - 100 minus 15 per hint - a number the client could
+        // choose. They are handed out one at a time by POST /game/hint now, and
+        // this is the record the score is computed from.
+        hintsTaken: [
+            {
+                _id: false,
+                index: { type: Number, required: true },
+                at: { type: Date, default: Date.now }
+            }
+        ],
+
         createdAt: { type: Date, default: Date.now },
 
         // A day is far longer than any sitting and short enough that abandoned

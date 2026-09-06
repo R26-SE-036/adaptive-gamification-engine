@@ -139,7 +139,7 @@ heuristic and the model is future work.
 | FR-07 | Evaluate rules after every session | **Done** *(fixed today)* | Was only evaluated when the *next* game was fetched |
 | FR-08 | Assign difficulty level | **Done** *(Phase 3)* | Five levels, and the dual-threshold rule |
 | FR-09 | Assign next game type by weakness | **Done** *(Phase 4)* | Format is now a real decision, not a lookup |
-| FR-10 | Hints and support recommendations | **Partly** | Hints work; "extra practice" is never assigned as a distinct thing |
+| FR-10 | Hints and support recommendations | **Done** *(Phase 5)* | Hints are server-side and counted; support is a named action with evidence |
 | FR-11 | Session summary with rationale | **Done** *(fixed today)* | The rationale was the placeholder |
 | FR-12 | Send summary to Progress Tracker | **Partly** | Happens from the *browser*, not this service — see below |
 | FR-13 | WebSocket state sync | **Missing** | Needs FR-03 |
@@ -233,6 +233,60 @@ moment, or if anyone ever writes a second client, the Progress Tracker silently
 never hears about it. The engine itself has no code that talks to the Progress
 Tracker at all. Moving that call server-side would be a small change and would
 make the requirement true as written.
+
+### Hints were free, and support did not exist
+
+Two halves of FR-10, both fixed in Phase 5.
+
+**Hints were shipped inside the question payload.** Every one was therefore
+free: a student could read all three in the browser's network tab and still be
+recorded as having used none — while the score, 100 minus 15 per hint, was
+computed from a count the *client* sent about itself. The one number meant to
+measure how much scaffolding a student needed was the one number they could
+choose.
+
+They now come one at a time from `POST /game/hint`, which records each. Verified
+in the browser: the question arrives with `hintCount: 3` and no `hints` array,
+two hints were taken, and submitting with `hintUsage: 0` in the payload still
+scored 70 rather than 100 — the server charged for what it had handed over.
+
+Sessions carry `hintUsageMeasured` for the same reason `errorCountMeasured`
+exists: a real count and a client's claim must not look alike to a rule reading
+them.
+
+One consequence worth noting. `/game/check` used to reveal the next hint
+automatically on a wrong attempt. That was right while hints were free; it is
+wrong now that each costs 15 points, so checking reports only how many hints
+remain. **A student is never billed for a hint they did not ask for.**
+
+**Support did not exist at all.** The submit response carried one fixed
+sentence — *"Good effort on X. Try one more guided practice round with hints."* —
+for every failing round on every concept, whether the student had missed once or
+six times running.
+
+`services/supportService.js` now returns a named action with the evidence it
+fired on:
+
+| action | when |
+|---|---|
+| `review_lesson` | three failures in a row, or unresolved findings in their own code |
+| `extra_practice` | the difficulty rule just dropped them a level |
+| `slow_down` | passing, but on more than 1.5 hints a round |
+| `keep_going` | nothing is wrong |
+
+Verified live — the escalation is what changes, not the wording:
+
+```
+1 failure  -> keep_going     Worth one more round of statement structure
+2 failures -> keep_going     Worth one more round of statement structure
+3 failures -> review_lesson  Read the statement structure lesson before the next round
+```
+
+Three, not two: two failures in a row is a bad afternoon and the difficulty rule
+already answers it by dropping a level. Three is a pattern that another round is
+unlikely to fix. `keep_going` is deliberately not shown in the interface —
+telling a student who is fine that they are fine would train them to skip the
+panel on the round where it matters.
 
 ### The structural limitation, and how it was removed
 
