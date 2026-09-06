@@ -4,7 +4,9 @@ Written against `R26-SE-036_IT22203380_Aaron Charles J_v2.pdf` after testing eve
 endpoint on 7 September 2026. Everything below was measured on the running
 service against MongoDB Atlas, not read off the code.
 
-The short version: **the engine works, and two of the three games are real.**
+The short version: **the engine works, and the games are real.** Pair Challenge
+was dropped by decision (see §2) and a fourth single-player game, CodeFix, was
+added in its place.
 The single largest gap is that the third game — Pair Challenge, the collaborative
 one — does not exist in any form, and four requirements depend on it. The second
 largest is that the machine-learning claim cannot currently be made, because the
@@ -131,7 +133,7 @@ heuristic and the model is future work.
 | FR-01 | Drag & Drop game | **Done** | 20 questions |
 | FR-02 | Bug Hunt game | **Done** | 40 questions |
 | FR-03 | Pair Challenge game | **Missing** | See §2 |
-| FR-04 | Capture 7 data points per session | **Partly** | See "error count" below |
+| FR-04 | Capture 7 data points per session | **Done** *(Phase 2)* | Error count is now measured server-side, not a 0/1 flag |
 | FR-05 | Collaboration data | **Missing** | Needs FR-03 |
 | FR-06 | Performance history per student | **Done** | Append-only, drives adaptation |
 | FR-07 | Evaluate rules after every session | **Done** *(fixed today)* | Was only evaluated when the *next* game was fetched |
@@ -179,12 +181,27 @@ should be removed from the proposal rather than left as an unmet requirement.
 
 ### Three of these need explaining in plain English
 
-**"Error count" is not a count.** The proposal treats error count as a major
-input, with rules like *"IF score < 50 AND errorCount > 5 THEN decrease
-difficulty"*. In the code, `errorCount` is set to `0` if the final answer was
-right and `1` if it was wrong. It can never exceed 1, so **that rule can never
-fire.** To make it real, the games would have to report every wrong move a
-student makes, not just whether the last one was right.
+**"Error count" was not a count — fixed in Phase 2.** The proposal treats error
+count as a major input, with rules like *"IF score < 50 AND errorCount > 5 THEN
+decrease difficulty"*. It used to be set to `0` if the final answer was right and
+`1` if it was wrong, so it could never exceed 1 and **that rule could never
+fire.**
+
+The reason it was binary is that the API only ever saw the FINAL answer. The new
+CodeFix game changes that: the student types a corrected line and asks the server
+whether it is right (`POST /game/check`), which grades the attempt **without
+ending the session** and records it. `/game/submit` then counts those rows.
+
+Measured live — the client claimed `attemptCount: 1` and the server recorded:
+
+```
+errorCount = 3   errorCountMeasured = true   attemptCount = 4
+```
+
+Both numbers are now measurements rather than things the client asserts about
+itself. Sessions carry `errorCountMeasured` so a rule reading `errorCount > n`
+can tell a real count from the old floor — the three original games still answer
+once and still fall back to the 0/1 value.
 
 **Difficulty has 3 levels, not 5.** The proposal names Beginner, Elementary,
 Intermediate, Advanced and Expert, and describes a "dual-threshold" rule where a
@@ -213,8 +230,16 @@ That cannot be honoured as written, and it is worth being precise about why.
 question bank follows it — I checked all 75 questions:
 
 ```
-concepts with more than one game type: 0 of 14
+concepts with more than one game type: 0 of 14     (before Phase 2)
+concepts with more than one game type: 14 of 14    (after)
 ```
+
+**Phase 2 removed the data half of this problem.** CodeFix was authored for all
+15 error types at three difficulties — 45 questions — so every concept now has a
+second format. What remains is the code half: `CONCEPT_GAME_MAPPING` still
+returns one type per concept, so the recommendation cannot yet choose between
+them. That is the next phase, and it is now a change to a lookup rather than an
+authoring project.
 
 So game type is not an independent decision at all. Choosing a concept chooses
 the type. A rule that "assigns Drag & Drop for logic errors" would either be

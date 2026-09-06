@@ -126,8 +126,37 @@ cd backend/ml && pip install -r requirements.txt && python app.py
 cd backend && npm install && npm start
 ```
 
+Tests: `npm test` (node's built-in runner, no dependency).
+
+Seeding a fresh database:
+
+```bash
+node data/seed_75_questions.js        # BugHunt / DragDrop / CodeTrace
+node data/seed_codefix_questions.js   # CodeFix
+```
+
 Then start `codeguru-web` (`npm run dev`, port 4200) and sign in with a real
 Code Coach account. The games are under **Practice**.
+
+## The games
+
+| Type | The student... | Answer |
+|---|---|---|
+| `BugHunt` | picks the line that is wrong | a line index |
+| `DragDrop` | orders shuffled lines | an ordering |
+| `CodeTrace` | predicts what the code prints | a value |
+| `CodeFix` | **rewrites the broken line** | a line of Java |
+
+CodeFix is the only one that asks the student to write code rather than
+recognise, order or predict it - and the only one that produces a real error
+count. Because the answer is typed, it is checked: `POST /game/check` grades an
+attempt **without ending the session** and records it, so `errorCount` is the
+number of wrong attempts this server graded rather than `isCorrect ? 0 : 1`.
+Sessions carry `errorCountMeasured` so a rule can tell the two apart.
+
+Typed answers are marked by `services/gradingService.js`: whitespace outside
+string literals is insignificant, everything else is significant, and a question
+may list several accepted forms of the same fix. `npm test` covers it.
 
 ## The difficulty model
 

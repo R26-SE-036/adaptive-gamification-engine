@@ -5,6 +5,7 @@
 const mongoose = require('mongoose');
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
+require('../config/dns').applyDnsOverride();
 
 const QuestionBank = require('../models/QuestionBank');
 const { CONCEPT_GAME_MAPPING } = require('../config/constants');

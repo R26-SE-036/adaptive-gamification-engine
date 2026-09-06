@@ -5,7 +5,12 @@
  * It prevents hardcoding string literals directly into the business logic or database schemas.
  */
 
-const GAME_TYPES = ['BugHunt', 'DragDrop', 'CodeTrace'];
+// CodeFix is the fourth, and the only one that asks the student to WRITE Java
+// rather than recognise, order or predict it. It also carries the fix for the
+// error count: because an answer can be checked without ending the session
+// (POST /game/check), a wrong attempt is a measured event rather than a number
+// the client reports about itself. See services/gradingService.js.
+const GAME_TYPES = ['BugHunt', 'DragDrop', 'CodeTrace', 'CodeFix'];
 
 const CONCEPT_TAGS = [
     'loop_boundaries',

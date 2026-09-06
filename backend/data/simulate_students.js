@@ -27,6 +27,7 @@ const axios = require('axios');
 const path = require('path');
 const mongoose = require('mongoose');
 require('dotenv').config({ path: path.join(__dirname, '../.env') });
+require('../config/dns').applyDnsOverride();
 
 const QuestionBank = require('../models/QuestionBank');
 

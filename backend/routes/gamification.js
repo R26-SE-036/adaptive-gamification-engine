@@ -5,8 +5,10 @@ const authMiddleware = require('../middleware/auth');
 const GameSession = require('../models/GameSession');
 const PlayerProfile = require('../models/PlayerProfile');
 const QuestionBank = require('../models/QuestionBank');
+const GameAttempt = require('../models/GameAttempt');
 const { predictDifficulty } = require('../services/difficultyService');
 const { recommendNextGame } = require('../services/recommendationService');
+const { gradeAnswer } = require('../services/gradingService');
 const { CONCEPT_GAME_MAPPING, GAME_TYPES, DIFFICULTY_LEVELS, DIFFICULTY_ALIASES } = require('../config/constants');
 
 function getAuthenticatedUserId(req) {
@@ -196,6 +198,77 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
     }
 });
 
+// POST /api/v1/gamification/game/check
+//
+// Grade one attempt WITHOUT ending the session, and record it.
+//
+// This is what makes the error count a measurement. The API previously only saw
+// a student's final answer, so `errorCount` was `isCorrect ? 0 : 1` and
+// `attemptCount` was whatever the client claimed - see models/GameAttempt.js.
+// CodeFix makes checking natural (type a line, ask, try again), and every check
+// is graded here and counted.
+//
+// Deliberately does NOT reveal the correct answer on a wrong attempt: unlimited
+// checking would otherwise be a way to read the answer out of the API one guess
+// at a time. It returns the next hint instead, which is the support FR-10 asks
+// for and costs the student score.
+router.post('/game/check', async (req, res) => {
+    try {
+        const { userId, learningSessionId, questionId, attempt } = req.body;
+
+        if (!userId || !learningSessionId || !questionId || attempt === undefined) {
+            return res.status(400).json({
+                error: 'userId, learningSessionId, questionId and attempt are required'
+            });
+        }
+
+        if (!assertUserAccess(req, userId)) {
+            return res.status(403).json({ error: 'Forbidden: cannot check another user answer' });
+        }
+
+        const question = await QuestionBank.findOne({ id: questionId });
+        if (!question) {
+            return res.status(404).json({ error: 'Question not found in database' });
+        }
+
+        let correct;
+        try {
+            ({ correct } = gradeAnswer(question, attempt));
+        } catch (gradingError) {
+            return res.status(400).json({ error: gradingError.message });
+        }
+
+        // One upsert-and-push. The unique index on
+        // (userId, learningSessionId, questionId) means concurrent clicks
+        // cannot create two documents that split the count - the second waits
+        // and appends to the first rather than racing it.
+        const updated = await GameAttempt.findOneAndUpdate(
+            { userId, learningSessionId, questionId },
+            { $push: { attempts: { answer: attempt, correct } } },
+            { new: true, upsert: true, setDefaultsOnInsert: true }
+        ).lean();
+
+        const attempts = updated?.attempts ?? [];
+        const wrongSoFar = attempts.filter((entry) => !entry.correct).length;
+
+        // One hint per wrong attempt, in order, then no more. The hints are
+        // already on the question and were only ever handed over in full.
+        const hints = question.hints ?? [];
+        const hint = correct ? null : hints[Math.min(wrongSoFar - 1, hints.length - 1)] ?? null;
+
+        return res.json({
+            correct,
+            attemptNumber: attempts.length,
+            wrongAttempts: wrongSoFar,
+            hint,
+            hintsRemaining: correct ? 0 : Math.max(0, hints.length - wrongSoFar)
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Failed to check the answer' });
+    }
+});
+
 // POST /api/v1/gamification/game/submit
 router.post('/game/submit', async (req, res) => {
     try {
@@ -223,36 +296,46 @@ router.post('/game/submit', async (req, res) => {
         // branch nor a valid GameSession enum value.
         const effectiveGameType = question.gameType || gameType;
 
+        // Grading lives in services/gradingService.js so this route and
+        // POST /game/check cannot drift apart on what counts as correct. The
+        // game type comes from the QUESTION there, not from the client.
         let isCorrect = false;
         try {
-            // Grade against the game type stored on the QUESTION, not the one
-            // the client sent. The client's value may be Code Coach's
-            // vocabulary (loop_tracer), which used to fall through to the else
-            // branch and reject a perfectly valid answer as
-            // "Invalid gameType submitted". It is also simply not the client's
-            // fact to assert.
-            if (effectiveGameType === 'BugHunt') {
-                isCorrect = String(selectedAnswer) === String(question.correctAnswer);
-            } else if (effectiveGameType === 'DragDrop') {
-                isCorrect = Array.isArray(selectedAnswer) &&
-                            Array.isArray(question.correctAnswer) &&
-                            selectedAnswer.length === question.correctAnswer.length &&
-                            selectedAnswer.every((val, index) => String(val) === String(question.correctAnswer[index]));
-            } else if (effectiveGameType === 'CodeTrace') {
-                isCorrect = String(selectedAnswer).trim().toLowerCase() === String(question.correctAnswer).trim().toLowerCase();
-            } else {
-                return res.status(400).json({ error: 'Invalid gameType submitted' });
-            }
-        } catch (e) {
-            console.error('Validation error:', e);
-            return res.status(400).json({ error: 'Error validating answer format' });
+            ({ correct: isCorrect } = gradeAnswer(question, selectedAnswer));
+        } catch (gradingError) {
+            console.error('Grading error:', gradingError);
+            return res.status(400).json({ error: gradingError.message });
         }
 
         
+        // ── The error count, measured rather than reported ───────────────────
+        //
+        // errorCount used to be `isCorrect ? 0 : 1`, so it could never exceed
+        // one and the proposal's own rule `errorCount > 5` was unreachable.
+        // attemptCount came from the client, which made the engine's efficiency
+        // input a number the client asserted about itself.
+        //
+        // Both are now read from the attempts this server graded via
+        // POST /game/check. When there are none - the three older games do not
+        // check, they answer once - the client's attemptCount is still used and
+        // the error count falls back to the old binary, which is at least
+        // honest about being a floor rather than a count.
+        const graded = await GameAttempt.findOne({
+            userId,
+            learningSessionId,
+            questionId
+        }).lean();
+
+        const gradedAttempts = graded?.attempts ?? [];
+        const measuredErrors = gradedAttempts.filter((attempt) => !attempt.correct).length;
+        const measured = gradedAttempts.length > 0;
+
         const normalizedAttemptCount = Number(attemptCount);
         const normalizedHintUsage = Number(hintUsage);
         const normalizedTimeTaken = Number(timeTakenSeconds);
-        const computedAttemptCount = Number.isFinite(normalizedAttemptCount) && normalizedAttemptCount > 0 ? normalizedAttemptCount : 1;
+        const computedAttemptCount = measured
+            ? gradedAttempts.length
+            : (Number.isFinite(normalizedAttemptCount) && normalizedAttemptCount > 0 ? normalizedAttemptCount : 1);
         const computedHintUsage = Number.isFinite(normalizedHintUsage) && normalizedHintUsage >= 0 ? normalizedHintUsage : 0;
         const computedTimeTaken = Number.isFinite(normalizedTimeTaken) && normalizedTimeTaken >= 0 ? normalizedTimeTaken : 0;
 
@@ -277,7 +360,9 @@ router.post('/game/submit', async (req, res) => {
             errorType,
             difficultyLevel,
             score: finalScore,
-            errorCount: isCorrect ? 0 : 1,
+            // The number of wrong attempts this server graded, not a flag.
+            errorCount: measured ? measuredErrors : (isCorrect ? 0 : 1),
+            errorCountMeasured: measured,
             attemptCount: computedAttemptCount,
             hintUsage: computedHintUsage,
             timeTakenSeconds: computedTimeTaken,

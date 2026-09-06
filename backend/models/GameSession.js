@@ -18,7 +18,13 @@ const GameSessionSchema = new mongoose.Schema({
     errorType: { type: String, enum: ERROR_TYPES },
     difficultyLevel: { type: String, enum: DIFFICULTY_LEVELS, required: true },
     score: { type: Number, default: 0 },
+    // How many wrong attempts. Real when errorCountMeasured is true: the
+    // student checked answers via POST /game/check and this counts the ones
+    // this server graded wrong. False means the old binary - one answer, so
+    // 0 or 1 - which is a floor, not a count. The adaptation rules need to be
+    // able to tell the difference before they read `errorCount > n`.
     errorCount: { type: Number, default: 0 },
+    errorCountMeasured: { type: Boolean, default: false },
     attemptCount: { type: Number, default: 1 },
     hintUsage: { type: Number, default: 0 },
     timeTakenSeconds: { type: Number, default: 0 },
