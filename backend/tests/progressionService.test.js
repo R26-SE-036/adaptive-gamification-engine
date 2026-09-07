@@ -9,14 +9,14 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const {
-    ADVANCE_AT,
-    REGRESS_AT,
-    CONSECUTIVE_REQUIRED,
-    STARTING_LEVEL,
-    currentLevel,
-    permittedBand
-} = require('../services/progressionService');
+const { STARTING_LEVEL, currentLevel, permittedBand } = require('../services/progressionService');
+const ruleConfig = require('../services/ruleConfigService');
+
+// The thresholds are configuration now (FR-15). Pinned to the defaults here so
+// these tests describe the rule rather than whatever a database happens to hold.
+ruleConfig.__setForTests({});
+const { advanceAt: ADVANCE_AT, regressAt: REGRESS_AT, consecutiveRequired: CONSECUTIVE_REQUIRED } =
+    ruleConfig.rules().progression;
 
 /** Sessions oldest-first, one day apart, so ordering is unambiguous. */
 function history(...entries) {

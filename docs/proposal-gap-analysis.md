@@ -144,7 +144,7 @@ heuristic and the model is future work.
 | FR-12 | Send summary to Progress Tracker | **Done** *(Phase 6)* | The engine transmits it server-side, to its own store |
 | FR-13 | WebSocket state sync | **Missing** | Needs FR-03 |
 | FR-14 | Educators view decision logs | **Dropped** | Requires a non-student role; the platform is deliberately student-only — see §4a |
-| FR-15 | Configure thresholds without code changes | **Partly** | Some are env vars; several are still hardcoded |
+| FR-15 | Configure thresholds without code changes | **Done** *(Phase 7)* | 15 thresholds, changeable at runtime — but see the note on "administrators" |
 
 | # | Requirement | Status |
 |---|---|---|
@@ -269,6 +269,51 @@ was logged rather than lost silently.
 
 Writes are idempotent — `MERGE` on the engine's own session id — so a retry
 cannot double-count.
+
+### FR-15, and the word "administrators"
+
+The proposal says thresholds shall be configurable *"by authorised
+administrators without requiring source code changes"*. Two halves, and only one
+of them is now true.
+
+**Configurable: yes.** Fifteen thresholds — the score formula's hint and attempt
+penalties, the pass and mastery marks, the exploration rate, the fallback
+heuristic's bands, the progression thresholds, and the support rules — are read
+at decision time from `services/ruleConfigService.js` rather than captured at
+import. The merge order is
+
+```
+stored config  >  environment variable  >  code default
+```
+
+so each layer overrides only what it actually sets. Several of these were
+literals in the middle of a function before — the score formula's 15 and 10, the
+heuristic's 45 and 75, the mastery bar's 80 — and changing them meant editing and
+redeploying.
+
+Verified live, with no restart: a round scoring **70** scored **40** after
+`scoring.hintPenalty` was raised from 15 to 30, and **70** again after the
+override was cleared.
+
+Values are validated against per-threshold bounds, and against each other — a
+`regressAt` above `advanceAt` is refused, because individually valid numbers can
+still describe an engine that cannot work.
+
+**Administrators: no, and this needs stating plainly.** There are none. The
+platform is student-only by decision (§4a), so there is no account type to grant
+this to and no role claim left to check. The endpoints are gated by a shared
+secret, `X-Config-Secret` — the same pattern the ML service already uses for
+`POST /retrain`. The "administrator" is whoever holds the secret, which is
+whoever deployed the service.
+
+That is a weaker claim than the proposal makes, and it is the honest one: a
+platform with one kind of account cannot have a privileged user without first
+having privileged users. **Either amend FR-15 to say "the service operator", or
+reinstate roles** — which is the same decision FR-14 turns on.
+
+With the secret unset, every one of these endpoints refuses everyone. Defaulting
+to open would put the engine's scoring under the control of anyone who can reach
+the port.
 
 ### Hints were free, and support did not exist
 

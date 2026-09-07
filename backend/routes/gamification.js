@@ -12,6 +12,7 @@ const { gradeAnswer } = require('../services/gradingService');
 const { chooseGameType } = require('../services/gameTypeService');
 const { recommendSupport } = require('../services/supportService');
 const { sendGameSummary, summaryFrom } = require('../services/studyGuiderClient');
+const ruleConfig = require('../services/ruleConfigService');
 const { CONCEPT_GAME_MAPPING, GAME_TYPES, DIFFICULTY_LEVELS, DIFFICULTY_ALIASES } = require('../config/constants');
 
 function getAuthenticatedUserId(req) {
@@ -461,8 +462,15 @@ router.post('/game/submit', async (req, res) => {
         // Ensure negative score does not happen
         // The hint count the score is charged for is the server's, not the
         // client's - see the note beside `takenHints`.
+        //
+        // The two penalties are configuration, not literals. They used to be 15
+        // and 10 written into this expression, so tuning how much a hint costs
+        // meant editing and redeploying - which is exactly what FR-15 asks the
+        // system not to require.
+        const { hintPenalty, attemptPenalty } = ruleConfig.rules().scoring;
         const chargedHints = hintsMeasured ? takenHints : computedHintUsage;
-        let rawScore = 100 - (chargedHints * 15) - ((computedAttemptCount - 1) * 10);
+        let rawScore =
+            100 - chargedHints * hintPenalty - (computedAttemptCount - 1) * attemptPenalty;
         if (!isCorrect) rawScore = 0; // if final submission is wrong
         const finalScore = Math.max(0, rawScore);
 
@@ -611,7 +619,7 @@ router.post('/game/submit', async (req, res) => {
         }).catch(() => {});
 
         const conceptLabel = conceptTag.replace(/_/g, ' ');
-        const masteredThisRound = finalScore >= 80;
+        const masteredThisRound = finalScore >= ruleConfig.rules().scoring.masteryMark;
         const attemptOutcome = masteredThisRound ? 'concept_progressed' : 'practice_recommended';
 
         // The support headline, always. It used to be one of two fixed sentences

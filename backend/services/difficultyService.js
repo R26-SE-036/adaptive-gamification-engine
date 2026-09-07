@@ -37,6 +37,7 @@ const axios = require('axios');
 const GameSession = require('../models/GameSession');
 const { getStrugglingConcepts } = require('./codeCoachClient');
 const { currentLevel, permittedBand } = require('./progressionService');
+const { rules } = require('./ruleConfigService');
 const { DIFFICULTY_LEVELS } = require('../config/constants');
 
 const ML_SERVICE_URL =
@@ -57,11 +58,8 @@ const ML_TIMEOUT_MS = Number(process.env.ML_TIMEOUT_MS || 5000);
  * 0.15 trades a slightly worse-fitting game roughly one time in seven for a
  * corpus that can eventually support a causal claim. Set to 0 to disable.
  */
-const EXPLORATION_RATE = Number(
-    process.env.DIFFICULTY_EXPLORATION_RATE !== undefined
-        ? process.env.DIFFICULTY_EXPLORATION_RATE
-        : 0.15
-);
+// Read at decision time from services/ruleConfigService.js, so it can be
+// changed without a restart (FR-15). Default 0.15.
 
 // The five levels, from config so this file and the ML service cannot disagree
 // about what exists or in what order.
@@ -83,8 +81,14 @@ const FEATURE_NAMES = [
     'success_rate'
 ];
 
-/** Matches SUCCESS_SCORE in ml/training_data.py. */
-const SUCCESS_SCORE = Number(process.env.SUCCESS_SCORE || 70);
+/**
+ * The pass mark. Matches SUCCESS_SCORE in ml/training_data.py.
+ *
+ * A getter rather than a captured constant: it is configurable at runtime now,
+ * and other modules import it. Exported as a function on the module below;
+ * this local reader keeps the call sites in this file unchanged.
+ */
+const passMark = () => rules().scoring.passMark;
 
 /**
  * Build the model's feature vector for one student on one concept.
@@ -119,7 +123,7 @@ function featuresFrom(pastSessions) {
     const mean = (pick) =>
         pastSessions.reduce((sum, session) => sum + (pick(session) || 0), 0) / gamesPlayed;
 
-    const successes = pastSessions.filter((s) => (s.score || 0) >= SUCCESS_SCORE).length;
+    const successes = pastSessions.filter((s) => (s.score || 0) >= passMark()).length;
 
     return {
         games_played: gamesPlayed,
@@ -164,8 +168,21 @@ async function fetchRepeatErrorCount({ conceptTag, accessToken }) {
  * student can still play, and so a first game has a defensible starting point.
  */
 function heuristicDifficulty(features, repeatErrorCount = 0) {
-    if ((repeatErrorCount ?? 0) >= 5 || features.avg_score < 45) return 'Beginner';
-    if ((repeatErrorCount ?? 0) >= 2 || features.avg_score < 75) return 'Intermediate';
+    const {
+        heuristicEasyBelow,
+        heuristicMediumBelow,
+        strugglesCapToFloor,
+        strugglesForMiddle
+    } = rules().difficulty;
+
+    const struggles = repeatErrorCount ?? 0;
+
+    if (struggles >= strugglesCapToFloor || features.avg_score < heuristicEasyBelow) {
+        return 'Beginner';
+    }
+    if (struggles >= strugglesForMiddle || features.avg_score < heuristicMediumBelow) {
+        return 'Intermediate';
+    }
     return 'Advanced';
 }
 
@@ -230,6 +247,8 @@ async function predictDifficulty({ userId, conceptTag, accessToken }) {
 
     // ── Exploration ───────────────────────────────────────────────────────────
     // Before consulting the model, so the choice is genuinely independent of it.
+    const EXPLORATION_RATE = rules().difficulty.explorationRate;
+
     if (EXPLORATION_RATE > 0 && Math.random() < EXPLORATION_RATE) {
         // Random WITHIN THE BAND, not across all five. Exploring the whole
         // ladder would hand a Beginner an Expert game one time in seven, which
@@ -269,7 +288,7 @@ async function predictDifficulty({ userId, conceptTag, accessToken }) {
         // than buried in weights, and reported so a capped choice is visible.
         let guard;
         const floor = band[0];
-        if ((repeatErrorCount ?? 0) >= 5 && difficulty !== floor) {
+        if ((repeatErrorCount ?? 0) >= rules().difficulty.strugglesCapToFloor && difficulty !== floor) {
             guard =
                 `capped to ${floor}: ${repeatErrorCount} unresolved struggles on this ` +
                 `concept`;
@@ -335,8 +354,19 @@ async function predictDifficulty({ userId, conceptTag, accessToken }) {
 module.exports = {
     FEATURE_NAMES,
     featuresFrom,
-    SUCCESS_SCORE,
-    EXPLORATION_RATE,
+    /**
+     * The pass mark, as a getter.
+     *
+     * It used to be a captured constant that other modules imported by value,
+     * which would have frozen them on whatever it was at require time - so a
+     * runtime change would have applied here and nowhere else.
+     */
+    get SUCCESS_SCORE() {
+        return rules().scoring.passMark;
+    },
+    get EXPLORATION_RATE() {
+        return rules().difficulty.explorationRate;
+    },
     buildFeatures,
     fetchRepeatErrorCount,
     heuristicDifficulty,

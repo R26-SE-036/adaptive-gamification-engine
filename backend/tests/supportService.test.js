@@ -10,11 +10,12 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const {
-    FAILURES_BEFORE_LESSON,
-    HINT_DEPENDENCE,
-    recommendSupport
-} = require('../services/supportService');
+const { recommendSupport } = require('../services/supportService');
+const ruleConfig = require('../services/ruleConfigService');
+
+ruleConfig.__setForTests({});
+const { failuresBeforeLesson: FAILURES_BEFORE_LESSON, hintDependence: HINT_DEPENDENCE } =
+    ruleConfig.rules().support;
 
 /** Sessions newest LAST, so the array reads in the order they were played. */
 function played(...entries) {

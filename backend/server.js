@@ -29,6 +29,12 @@ app.use(express.json());
 // middleware/auth.js. A local password login used to live at /api/v1/auth,
 // unmounted but present; it was a second identity system waiting to be
 // switched on, and has been removed.
+// Rule configuration, mounted BEFORE the gamification router and therefore
+// outside its student-auth middleware. An operator changing a threshold is not
+// acting as a student and should not need a student's token; the endpoints are
+// gated by RULE_CONFIG_SECRET instead. See routes/ruleConfig.js.
+app.use('/api/v1/gamification/rules', require('./routes/ruleConfig'));
+
 const gamificationRoutes = require('./routes/gamification');
 app.use('/api/v1/gamification', gamificationRoutes);
 
@@ -39,6 +45,15 @@ app.get('/health', (req, res) => {
         database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
         identity_provider: CODE_COACH_URL
     });
+});
+
+// Load the stored thresholds once the database is up, so the first request
+// does not run on defaults while the lazy refresh is still in flight.
+mongoose.connection.once('open', () => {
+    require('./services/ruleConfigService')
+        .refresh()
+        .then(() => console.log('Rule configuration loaded'))
+        .catch((error) => console.warn(`Rule configuration unavailable: ${error.message}`));
 });
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/code-guru';

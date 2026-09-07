@@ -43,29 +43,23 @@
  */
 
 const GameSession = require('../models/GameSession');
-const { SUCCESS_SCORE } = require('./difficultyService');
+const { rules } = require('./ruleConfigService');
 
 /**
- * Consecutive failures on one concept before a lesson is recommended.
+ * The thresholds live in services/ruleConfigService.js so they can be changed
+ * without a redeploy (FR-15). Their defaults, and why:
  *
- * Three, not two. Two failures in a row is a bad afternoon and the difficulty
- * rule already responds to it by dropping a level; three is a pattern that
- * another round at any level is unlikely to fix on its own.
+ *   failuresBeforeLesson 3   Three, not two. Two failures in a row is a bad
+ *                            afternoon and the difficulty rule already responds
+ *                            by dropping a level; three is a pattern another
+ *                            round at any level is unlikely to fix.
+ *   hintDependence 1.5       Questions carry three hints and the score charges
+ *                            for each. A student averaging more than one and a
+ *                            half is passing on scaffolding rather than on the
+ *                            concept - which the score alone cannot distinguish
+ *                            from a student who is simply slower.
+ *   window 5                 How many recent sessions the rules look at.
  */
-const FAILURES_BEFORE_LESSON = Number(process.env.SUPPORT_FAILURES_BEFORE_LESSON || 3);
-
-/**
- * Hints per session, averaged, above which a passing student is leaning on them.
- *
- * Questions carry three hints, and the score already charges 15 points each. A
- * student averaging more than one and a half is passing on scaffolding rather
- * than on the concept, which the score alone does not distinguish from a
- * student who is genuinely slower.
- */
-const HINT_DEPENDENCE = Number(process.env.SUPPORT_HINT_DEPENDENCE || 1.5);
-
-/** How many recent sessions on the concept the rules look at. */
-const WINDOW = Number(process.env.SUPPORT_WINDOW || 5);
 
 /**
  * Decide what support, if any, this student needs on this concept.
@@ -89,6 +83,13 @@ async function recommendSupport({
     repeatErrorCount,
     sessions
 }) {
+    const {
+        failuresBeforeLesson: FAILURES_BEFORE_LESSON,
+        hintDependence: HINT_DEPENDENCE,
+        window: WINDOW
+    } = rules().support;
+    const SUCCESS_SCORE = rules().scoring.passMark;
+
     const history =
         sessions ||
         (await GameSession.find({ userId, conceptTag })
@@ -192,9 +193,4 @@ async function recommendSupport({
     };
 }
 
-module.exports = {
-    FAILURES_BEFORE_LESSON,
-    HINT_DEPENDENCE,
-    WINDOW,
-    recommendSupport
-};
+module.exports = { recommendSupport };

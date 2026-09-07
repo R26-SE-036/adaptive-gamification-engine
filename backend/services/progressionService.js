@@ -43,22 +43,22 @@ const {
     resolveDifficulty
 } = require('../config/constants');
 
+
 /**
- * Score at or above which a session counts as "above the threshold".
+ * The thresholds, read at decision time rather than captured at import.
  *
- * 80 rather than the 70 pass mark on purpose: passing means the level is
- * appropriate, and moving up should require comfort rather than a bare pass.
+ * They used to be `const X = Number(process.env...)`, which meant changing one
+ * required a restart - and FR-15 asks for configuration "without requiring
+ * source code changes". `rules()` is a synchronous read of an in-memory
+ * snapshot, so this stays a pure function; see services/ruleConfigService.js.
+ *
+ * The defaults are unchanged and live there now:
+ *   advanceAt 80  - higher than the 70 pass mark on purpose. Passing means the
+ *                   level is appropriate; moving up should require comfort.
+ *   regressAt 40
+ *   consecutiveRequired 2 - what the proposal specifies.
  */
-const ADVANCE_AT = Number(process.env.PROGRESSION_ADVANCE_AT || 80);
-
-/** Score at or below which a session counts as "below the threshold". */
-const REGRESS_AT = Number(process.env.PROGRESSION_REGRESS_AT || 40);
-
-/**
- * How many consecutive sessions are needed to move. The proposal says two, and
- * this is the constant that says so.
- */
-const CONSECUTIVE_REQUIRED = Number(process.env.PROGRESSION_CONSECUTIVE || 2);
+const { rules } = require('./ruleConfigService');
 
 /** Where a student starts. The proposal: "All students start at the Beginner level". */
 const STARTING_LEVEL = DIFFICULTY_LEVELS[0];
@@ -74,6 +74,9 @@ const STARTING_LEVEL = DIFFICULTY_LEVELS[0];
  *            consecutive: number, reason: string}}
  */
 function currentLevel(sessions) {
+    const { advanceAt: ADVANCE_AT, regressAt: REGRESS_AT, consecutiveRequired: CONSECUTIVE_REQUIRED } =
+        rules().progression;
+
     const played = [...(sessions || [])]
         .filter((session) => Number.isFinite(session?.score))
         .sort((a, b) => new Date(a.completedAt || 0) - new Date(b.completedAt || 0));
@@ -194,9 +197,6 @@ function permittedBand(progression) {
 }
 
 module.exports = {
-    ADVANCE_AT,
-    REGRESS_AT,
-    CONSECUTIVE_REQUIRED,
     STARTING_LEVEL,
     currentLevel,
     permittedBand

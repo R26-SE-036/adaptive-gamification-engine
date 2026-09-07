@@ -165,6 +165,39 @@ Typed answers are marked by `services/gradingService.js`: whitespace outside
 string literals is insignificant, everything else is significant, and a question
 may list several accepted forms of the same fix. `npm test` covers it.
 
+## Changing thresholds without a redeploy
+
+Fifteen thresholds are configuration rather than literals - the score formula's
+penalties, the pass and mastery marks, the exploration rate, the fallback
+heuristic's bands, the progression thresholds and the support rules. They are
+read at decision time, so a change takes effect without a restart.
+
+```
+stored config  >  environment variable  >  code default
+```
+
+```bash
+curl -H "X-Config-Secret: $RULE_CONFIG_SECRET" \
+     http://localhost:3002/api/v1/gamification/rules
+
+curl -X PUT -H "X-Config-Secret: $RULE_CONFIG_SECRET" \
+     -H 'Content-Type: application/json' \
+     -d '{"values": {"scoring.hintPenalty": 20}, "note": "hints felt cheap"}' \
+     http://localhost:3002/api/v1/gamification/rules
+
+curl -X DELETE -H "X-Config-Secret: $RULE_CONFIG_SECRET" \
+     http://localhost:3002/api/v1/gamification/rules
+```
+
+GET reports where each value came from - `stored`, `env` or `default` - because
+"it is 80" does not tell an operator which of the three to change. Setting a key
+to `null` clears its override rather than pinning it to today's default.
+
+**On authorisation.** The proposal says "authorised administrators"; there are
+none, because the platform is student-only and roles were removed. The secret is
+the operator, which is the only party this system can distinguish. Unset, the
+endpoints refuse everyone.
+
 ## Sending rounds to the Progress Tracker
 
 FR-12. After every completed round the engine POSTs a summary to Study Guider at
