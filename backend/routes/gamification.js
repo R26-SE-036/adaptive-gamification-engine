@@ -794,6 +794,16 @@ router.post('/game/submit', async (req, res) => {
               : `Good effort on ${conceptLabel}. One more round should settle it.`;
 
         res.json({
+            // WHICH round this was.
+            //
+            // The engine mints this id, files the summary under it in Study
+            // Guider and stamps it on the adaptation decision - and never told
+            // the client, so a caller that had just finished a round had no way
+            // to refer to it afterwards. Anything wanting to correlate its own
+            // round with the platform's record of it had to guess by timestamp.
+            //
+            // Found by the cross-service test, which needed exactly that join.
+            gameSessionId: session.gameSessionId,
             score: finalScore,
             attemptOutcome,
             learnerFeedback,
