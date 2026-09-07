@@ -139,7 +139,7 @@ async function chooseGameType({
 
     const played =
         sessions ||
-        (await GameSession.find({ userId, conceptTag }).select('gameType score').lean());
+        (await GameSession.evidence({ userId, conceptTag }).select('gameType score').lean());
 
     const averages = averageByFormat(played);
     const attempted = available.filter((gameType) => averages.has(gameType));
@@ -169,7 +169,7 @@ async function chooseGameType({
         const playedAnywhere =
             formatCounts ||
             (await GameSession.aggregate([
-                { $match: { userId } },
+                { $match: { userId, ...GameSession.COUNTS_AS_EVIDENCE } },
                 { $group: { _id: '$gameType', n: { $sum: 1 } } }
             ]));
 

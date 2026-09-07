@@ -108,7 +108,7 @@ async function recommendNextGame({ userId, conceptTag, lastScore }) {
     // Their best on this concept, not just the round they have this second - one
     // unlucky attempt should not undo a concept they have already shown.
     const best = await GameSession.aggregate([
-        { $match: { userId, conceptTag } },
+        { $match: { userId, conceptTag, ...GameSession.COUNTS_AS_EVIDENCE } },
         { $group: { _id: null, best: { $max: '$score' } } }
     ]);
 
@@ -128,7 +128,7 @@ async function recommendNextGame({ userId, conceptTag, lastScore }) {
 
     // ── R2: cleared here, weaker somewhere else ──────────────────────────────
     const elsewhere = await GameSession.aggregate([
-        { $match: { userId, conceptTag: { $ne: conceptTag } } },
+        { $match: { userId, conceptTag: { $ne: conceptTag }, ...GameSession.COUNTS_AS_EVIDENCE } },
         { $group: { _id: '$conceptTag', average: { $avg: '$score' } } },
         { $match: { average: { $lt: SUCCESS_SCORE } } },
         { $sort: { average: 1 } },

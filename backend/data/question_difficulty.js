@@ -70,7 +70,14 @@ async function main() {
 
     const passMark = rules().scoring.passMark;
 
-    const match = { questionId: { $ne: null, $exists: true } };
+    // Invalidated rounds are excluded unconditionally, not behind a flag. The
+    // whole purpose of this script is to measure how hard a question is from
+    // how students did on it, and a round lost to a DEFECTIVE question measures
+    // the defect. Provenance is a choice (--real-only); validity is not.
+    const match = {
+        questionId: { $ne: null, $exists: true },
+        ...GameSession.COUNTS_AS_EVIDENCE
+    };
     if (flag('real-only')) match.dataSource = 'real';
 
     const attempts = await GameSession.aggregate([

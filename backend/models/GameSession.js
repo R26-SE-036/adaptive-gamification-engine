@@ -66,10 +66,58 @@ const GameSessionSchema = new mongoose.Schema({
     // fitting, so a seeded database cannot silently become a research result.
     dataSource: { type: String, enum: ['real', 'simulated', 'test'], default: 'real', index: true },
 
+    /**
+     * Why this round must not be read as evidence about the student.
+     *
+     * ===================== PROVENANCE IS NOT VALIDITY =====================
+     * `dataSource` says WHO produced a row. This says whether the row means
+     * what it appears to mean. They are different questions and a row can fail
+     * the second while passing the first: a real student really did play these
+     * rounds, so they are `real` and always will be - but 17 of the 20 Drag &
+     * Drop questions in the bank at the time were defective. Eight had answers
+     * that could not be reached, so passing was impossible; nine were the
+     * identity permutation, so the starting arrangement already scored 100.
+     *
+     * A round lost to an unwinnable question is recorded as a student failing.
+     * That is not a missing observation, it is a WRONG one, and a wrong label
+     * is worse for a model than no label - it teaches that this student cannot
+     * do this concept at this level, and the difficulty engine then keeps them
+     * down there on the strength of it.
+     *
+     * Null means the row counts. A string is both the flag and the audit trail:
+     * nothing is deleted, the reason travels with the row, and anyone can see
+     * what was excluded and why.
+     */
+    invalidatedReason: { type: String, default: null, index: true },
+
     startedAt: { type: Date, default: Date.now },
     completedAt: { type: Date, default: Date.now }
 }, { collection: 'gameSessions' });
 
 GameSessionSchema.index({ userId: 1, conceptTag: 1, completedAt: -1 });
+
+/**
+ * The predicate for "this round counts", as a match fragment.
+ *
+ * Exported as one object rather than written out at each call site because
+ * there are eight of them - the feature builder, the progression rule, the
+ * format chooser, the support rules, the recommender, repeat-avoidance and two
+ * analysis scripts - and a filter that has to be remembered in eight places is
+ * a filter that will be missing from one of them. Spread it into an aggregate's
+ * $match; use the `evidence()` static for a find.
+ */
+GameSessionSchema.statics.COUNTS_AS_EVIDENCE = Object.freeze({ invalidatedReason: null });
+
+/**
+ * Sessions that count as evidence about a student.
+ *
+ * Use this rather than `.find()` anywhere the result feeds a decision, a
+ * feature, or a reported number. `.find()` is still correct for a migration or
+ * an audit, which needs to see the excluded rows too - so this is a separate
+ * method rather than a hook that would silently hide them from everything.
+ */
+GameSessionSchema.statics.evidence = function evidence(match = {}) {
+    return this.find({ ...match, invalidatedReason: null });
+};
 
 module.exports = mongoose.model('GameSession', GameSessionSchema);

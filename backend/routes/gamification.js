@@ -219,7 +219,11 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
         // EXCLUSION IS A PREFERENCE, NOT A FILTER. Every query below falls back
         // to ignoring it, because "you have seen them all" must mean "here is
         // one again", never "no game for you".
-        const recentlyPlayed = await GameSession.find({ userId, conceptTag })
+        // Invalidated rounds are excluded here too, and for a reason beyond
+        // consistency: a question withdrawn because it was defective has since
+        // been re-authored, so it is one we actively WANT to serve again rather
+        // than suppress as recently seen.
+        const recentlyPlayed = await GameSession.evidence({ userId, conceptTag })
             .sort({ completedAt: -1 })
             .limit(RECENT_QUESTION_MEMORY)
             .select('questionId')

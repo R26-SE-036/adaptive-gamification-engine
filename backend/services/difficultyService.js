@@ -101,7 +101,7 @@ const passMark = () => rules().scoring.passMark;
  */
 async function buildFeatures({ userId, conceptTag }) {
     return featuresFrom(
-        await GameSession.find({ userId, conceptTag }).sort({ completedAt: 1 }).lean()
+        await GameSession.evidence({ userId, conceptTag }).sort({ completedAt: 1 }).lean()
     );
 }
 
@@ -205,7 +205,12 @@ async function predictDifficulty({ userId, conceptTag, accessToken }) {
     // The sessions are loaded once and used twice - by the feature builder and
     // by the progression rule. Two queries for the same rows would have doubled
     // the slowest local part of a decision already over its NFR-01 budget.
-    const sessionsPromise = GameSession.find({ userId, conceptTag })
+    // `evidence`, not `find`: a round played against a defective question is a
+    // wrong observation rather than a missing one, and these rows feed BOTH the
+    // model's features and the progression rule. Left in, five unpassable Drag
+    // & Drop rounds would read as a student who cannot do the concept, and the
+    // engine would hold them at the bottom of the ladder on that evidence.
+    const sessionsPromise = GameSession.evidence({ userId, conceptTag })
         .sort({ completedAt: 1 })
         .lean();
 

@@ -170,6 +170,21 @@ def build_rows(sessions: list[dict]) -> pd.DataFrame:
 
         if not user_id or not concept or completed is None:
             continue
+
+        # ── Rounds that do not mean what they appear to mean ──────────────
+        #
+        # Dropped HERE, before the per-student sequence is built, and not
+        # later as a label filter. That ordering is the whole point: an
+        # invalidated round is not only a wrong label for itself, it is also
+        # part of the HISTORY of every round that student played afterwards.
+        # Leaving it in and merely refusing to predict on it would still feed
+        # its score into the next round's avg_score, recent_score and
+        # success_rate - so the defect would propagate forward through the
+        # features even though the row itself was never a target.
+        #
+        # See GameSession.invalidatedReason for what is marked and why.
+        if session.get("invalidatedReason"):
+            continue
         difficulty = canonical_difficulty(difficulty)
         if difficulty is None:
             continue

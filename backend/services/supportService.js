@@ -92,7 +92,7 @@ async function recommendSupport({
 
     const history =
         sessions ||
-        (await GameSession.find({ userId, conceptTag })
+        (await GameSession.evidence({ userId, conceptTag })
             .sort({ completedAt: -1 })
             .limit(WINDOW)
             .select('score hintUsage errorCount completedAt')
