@@ -16,6 +16,19 @@ const GameSessionSchema = new mongoose.Schema({
     gameType: { type: String, enum: GAME_TYPES, required: true },
     conceptTag: { type: String, enum: CONCEPT_TAGS, required: true, index: true },
     errorType: { type: String, enum: ERROR_TYPES },
+
+    // WHICH question was played.
+    //
+    // The session recorded the concept, the format and the level but never the
+    // question itself, so nothing downstream could tell two rounds apart. The
+    // repeat-avoidance in routes/gamification.js reads this to stop serving a
+    // question the student has just seen, and without it that query excluded
+    // nothing at all - silently, because an absent field simply yields no ids.
+    //
+    // It is also the only way to answer "how hard is question X" once a cohort
+    // has played, which is what would let difficulty labels be measured rather
+    // than authored.
+    questionId: { type: String, index: true },
     difficultyLevel: { type: String, enum: DIFFICULTY_LEVELS, required: true },
     score: { type: Number, default: 0 },
     // How many wrong attempts. Real when errorCountMeasured is true: the

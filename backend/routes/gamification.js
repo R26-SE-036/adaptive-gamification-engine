@@ -524,6 +524,9 @@ router.post('/game/submit', async (req, res) => {
             gameType: effectiveGameType,
             conceptTag,
             errorType,
+            // Recorded so a later round can avoid repeating it, and so the
+            // per-question difficulty can eventually be measured from outcomes.
+            questionId,
             difficultyLevel,
             score: finalScore,
             // The number of wrong attempts this server graded, not a flag.

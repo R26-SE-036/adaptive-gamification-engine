@@ -323,9 +323,29 @@ four-question slot: four distinct questions, then a repeat only once the slot
 was exhausted. Exclusion is a preference, never a filter — "you have seen them
 all" must mean "here is one again", not "no game for you".
 
-**The real fix for diversity is more questions.** 78 single-question slots is
-the underlying problem, and it is an authoring job of roughly 180 more questions
-to reach three per slot.
+**The underlying problem was fixed by authoring.** 193 new questions took the
+bank from 150 to **343**, and every one of the 112 (concept, level, format) slots
+now holds at least three:
+
+```
+before   1q: 78 slots   2q: 32   4q: 2
+after    3q: 105 slots  4q: 7    slots below 3: 0
+```
+
+Each is a different *shape* of its error type rather than the same snippet
+renamed - an off-by-one appears as `<=`, as `length + 1`, as a nested inner
+bound, as a downward loop, and inside a `reverse()` where the extra swap undoes
+itself. A student who has memorised one fix still has to understand the next.
+
+Measured on a concept with no prior history: three distinct questions in three
+rounds, and a repeat only on the fourth once the slot was exhausted.
+
+**One bug this uncovered.** `GameSession` had no `questionId` field, so it
+recorded the concept, the format and the level but never *which question* was
+played. The repeat-avoidance query read that field and therefore excluded
+nothing at all - silently, because an absent field simply yields no ids. It is
+stored now, which also makes per-question difficulty measurable from outcomes
+once a cohort has played, rather than only authored.
 
 ### FR-15, and the word "administrators"
 
