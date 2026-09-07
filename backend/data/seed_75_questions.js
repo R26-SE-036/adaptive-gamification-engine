@@ -25,7 +25,17 @@ function bugHunt(id, errorType, conceptTag, difficulty, codeLines, buggyLineInde
     };
 }
 
-function dragDrop(id, errorType, conceptTag, difficulty, codeLines, correctAnswer, hints, explanation) {
+// dragDrop() and its 20 questions moved to data/seed_dragdrop_questions.js.
+//
+// They were re-authored there because 17 of the 20 were unplayable: eight had
+// an answer longer than the question had lines, so no submission could match,
+// and nine were already in the correct order. The new file derives both stored
+// fields from the code rather than having anyone write a permutation by hand,
+// which is how these went wrong.
+//
+// Left out of this file entirely rather than fixed in place: re-running this
+// seeder must not restore the broken versions.
+function __retired_dragDrop(id, errorType, conceptTag, difficulty, codeLines, correctAnswer, hints, explanation) {
     return {
         id,
         errorType,
@@ -77,26 +87,6 @@ const questionsData = [
         'Reverse loop starts at i = arr.length which causes an out-of-bounds error.'),
 
     // ── 2. INCORRECT_CONDITIONAL_OPERATOR (5) ────────────────────────────────
-    dragDrop('q_cond_op_01', 'INCORRECT_CONDITIONAL_OPERATOR', 'conditional_logic', 'Beginner',
-        ['        if (score = 100) {', 'public class Main {', '    public static void check(int score) {', '        }', '    }', '}'],
-        [1, 2, 0, 3, 4, 5], ['A condition should compare, not assign.', 'Look at the operator inside the if condition.', 'Use == for comparison, not = for assignment.'],
-        'if (score = 100) uses assignment instead of comparison; use == instead.'),
-    dragDrop('q_cond_op_02', 'INCORRECT_CONDITIONAL_OPERATOR', 'conditional_logic', 'Beginner',
-        ['        if (age >= 18) {', 'public class Main {', '    public static void verify(int age) {', '            System.out.println("Adult");', '        }', '    }', '}'],
-        [1, 2, 0, 3, 4, 5, 6], ['Order the class, method, condition, and body correctly.', 'The if condition should come before its body.', 'Ensure braces enclose the method properly.'],
-        'Arrange conditional structure with proper comparison operator and block order.'),
-    dragDrop('q_cond_op_03', 'INCORRECT_CONDITIONAL_OPERATOR', 'conditional_logic', 'Intermediate',
-        ['        if (temp > 30) {', 'public class Main {', '    public static void report(int temp) {', '            System.out.println("Hot");', '        } else {', '            System.out.println("Cool");', '        }', '    }', '}'],
-        [1, 2, 0, 3, 4, 5, 6, 7, 8, 9], ['Place the if-else chain in logical order.', 'The condition temp > 30 should precede its branches.', 'Ensure else follows the if block.'],
-        'Conditional chain must use correct comparison operators in proper structure.'),
-    dragDrop('q_cond_op_04', 'INCORRECT_CONDITIONAL_OPERATOR', 'conditional_logic', 'Intermediate',
-        ['        if (x != 0) {', 'public class Main {', '    public static void divide(int x, int y) {', '            System.out.println(y / x);', '        }', '    }', '}'],
-        [1, 2, 0, 3, 4, 5, 6], ['Check that the condition guards against invalid operations.', 'x != 0 prevents division by zero.', 'Order class, method, guard, and body correctly.'],
-        'Guard condition x != 0 uses correct != operator to prevent division by zero.'),
-    dragDrop('q_cond_op_05', 'INCORRECT_CONDITIONAL_OPERATOR', 'conditional_logic', 'Advanced',
-        ['        if (score >= 90) {', 'public class Main {', '    public static void grade(int score) {', '            System.out.println("A");', '        } else if (score >= 75) {', '            System.out.println("B");', '        } else {', '            System.out.println("C");', '        }', '    }', '}'],
-        [1, 2, 0, 3, 4, 5, 6, 7, 8, 9, 10, 11], ['Highest threshold should be evaluated first.', 'Use >= for inclusive boundary checks.', 'Order if-else-if chain from highest to lowest score.'],
-        'Grade chain uses >= correctly; highest cutoff evaluated first.'),
 
     // ── 3. ARRAY_LENGTH_INDEX_MISUSE (5) ─────────────────────────────────────
     bugHunt('q_arr_len_01', 'ARRAY_LENGTH_INDEX_MISUSE', 'array_indexing', 'Beginner',
@@ -187,26 +177,6 @@ const questionsData = [
         'return "unknown" after switch with exhaustive returns is unreachable.'),
 
     // ── 7. MISSING_BREAK_IN_SWITCH (5) ───────────────────────────────────────
-    dragDrop('q_switch_01', 'MISSING_BREAK_IN_SWITCH', 'switch_statements', 'Beginner',
-        ['switch (day) {', '    case 1: System.out.println("Mon"); break;', '    case 2: System.out.println("Tue"); break;', '    default: System.out.println("Other"); break;', '}'],
-        [0, 1, 2, 3, 4], ['Each case needs break to prevent fall-through.', 'Without break, execution continues to next case.', 'Arrange cases with proper break termination.'],
-        'Switch cases should include break to prevent fall-through.'),
-    dragDrop('q_switch_02', 'MISSING_BREAK_IN_SWITCH', 'switch_statements', 'Beginner',
-        ['switch (grade) {', '    case \'A\': System.out.println("Excellent"); break;', '    case \'B\': System.out.println("Good"); break;', '    case \'C\': System.out.println("Fair"); break;', '    default: System.out.println("Fail"); break;', '}'],
-        [0, 1, 2, 3, 4, 5, 6], ['Each grade case must end with break.', 'Fall-through would print multiple messages.', 'Order switch with breaks after each case body.'],
-        'All switch cases include break statements to prevent fall-through.'),
-    dragDrop('q_switch_03', 'MISSING_BREAK_IN_SWITCH', 'switch_statements', 'Intermediate',
-        ['switch (month) {', '    case 1: case 3: case 5: System.out.println("31 days"); break;', '    case 2: System.out.println("28 days"); break;', '    default: System.out.println("30 days"); break;', '}'],
-        [0, 1, 2, 3, 4, 5], ['Grouped cases share one body and one break.', 'case 2 and default need their own breaks.', 'Ensure each branch terminates with break.'],
-        'Switch with grouped cases still requires break after shared body.'),
-    dragDrop('q_switch_04', 'MISSING_BREAK_IN_SWITCH', 'switch_statements', 'Intermediate',
-        ['switch (op) {', '    case "+": result = a + b; break;', '    case "-": result = a - b; break;', '    case "*": result = a * b; break;', '    default: result = 0; break;', '}'],
-        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], ['Each operator case computes then breaks.', 'Without break, multiple operations would run.', 'Order operator cases with break after assignment.'],
-        'Calculator switch requires break after each operation to avoid fall-through.'),
-    dragDrop('q_switch_05', 'MISSING_BREAK_IN_SWITCH', 'switch_statements', 'Advanced',
-        ['switch (status) {', '    case 0: log("Pending"); break;', '    case 1: log("Active"); break;', '    case 2: log("Done"); break;', '    case 3: log("Cancelled"); break;', '    default: log("Unknown"); break;', '}'],
-        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], ['Four explicit cases plus default each need break.', 'Missing break causes unintended status logging.', 'Complete switch structure with breaks.'],
-        'Status switch with four cases and default all require break statements.'),
 
     // ── 8. EMPTY_CONDITIONAL_BODY (5) ────────────────────────────────────────
     bugHunt('q_empty_if_01', 'EMPTY_CONDITIONAL_BODY', 'statement_structure', 'Beginner',
@@ -253,26 +223,6 @@ const questionsData = [
         'discount = discount ignores price and rate; should compute actual discount.'),
 
     // ── 10. ALWAYS_TRUE_OR_CONDITION (5) ─────────────────────────────────────
-    dragDrop('q_bool_or_01', 'ALWAYS_TRUE_OR_CONDITION', 'boolean_logic', 'Beginner',
-        ['public class Main {', '    public static boolean isValid(int x) {', '        return (x != 5 || x != 10);', '    }', '}'],
-        [0, 1, 2, 3, 4], ['x != 5 || x != 10 is true for every number.', 'If x is 5, then x != 10 is true.', 'Use && to require both conditions.'],
-        'OR of two != checks is always true; use && for valid range check.'),
-    dragDrop('q_bool_or_02', 'ALWAYS_TRUE_OR_CONDITION', 'boolean_logic', 'Beginner',
-        ['public class Main {', '    public static boolean inRange(int n) {', '        return (n < 0 || n > 100);', '    }', '}'],
-        [0, 1, 2, 3, 4], ['This returns true for values OUTSIDE 0-100.', 'Logic may be inverted or use wrong operator.', 'Use && with corrected bounds for in-range check.'],
-        'n < 0 || n > 100 detects out-of-range; in-range needs && with negation.'),
-    dragDrop('q_bool_or_03', 'ALWAYS_TRUE_OR_CONDITION', 'boolean_logic', 'Intermediate',
-        ['public class Main {', '    public static boolean check(int a, int b) {', '        return (a != b || b != a);', '    }', '}'],
-        [0, 1, 2, 3, 4], ['a != b and b != a are logically equivalent.', 'OR of equivalent conditions is tautological.', 'Restructure to a meaningful single comparison.'],
-        'a != b || b != a is redundant and always equivalent to a != b.'),
-    dragDrop('q_bool_or_04', 'ALWAYS_TRUE_OR_CONDITION', 'boolean_logic', 'Intermediate',
-        ['public class Main {', '    public static boolean isEmpty(String s) {', '        return (s == null || s.length() >= 0);', '    }', '}'],
-        [0, 1, 2, 3, 4], ['s.length() >= 0 is always true for non-null strings.', 'Combined with ||, non-null strings always match.', 'Use && with s.length() == 0 for empty check.'],
-        's.length() >= 0 is always true; makes isEmpty always true for non-null strings.'),
-    dragDrop('q_bool_or_05', 'ALWAYS_TRUE_OR_CONDITION', 'boolean_logic', 'Advanced',
-        ['public class Main {', '    public static boolean outsideRange(int x) {', '        return (x < 1 || x > 0);', '    }', '}'],
-        [0, 1, 2, 3, 4], ['Every integer is either < 1 or > 0.', 'x < 1 || x > 0 covers all integers.', 'This condition is always true (tautology).'],
-        'x < 1 || x > 0 is a tautology true for every integer.'),
 
     // ── 11. IGNORED_STRING_METHOD_RESULT (5) ────────────────────────────────
     codeTrace('q_immutable_01', 'IGNORED_STRING_METHOD_RESULT', 'immutable_strings', 'Beginner',
@@ -341,26 +291,6 @@ const questionsData = [
         'start <= end is false when start=20 and end=10; sum remains 0.'),
 
     // ── 14. DUPLICATE_IF_ELSE_CONDITION (5) ──────────────────────────────────
-    dragDrop('q_dup_if_01', 'DUPLICATE_IF_ELSE_CONDITION', 'conditional_logic', 'Beginner',
-        ['if (score > 80) {', '    System.out.println("High");', '} else if (score > 50) {', '    System.out.println("Medium");', '} else {', '    System.out.println("Low");', '}'],
-        [0, 1, 2, 3, 4, 5, 6], ['Each branch should test a unique condition.', 'Avoid duplicating conditions in else-if.', 'Order from highest to lowest threshold.'],
-        'Distinct conditions in if-else-if chain avoid duplicate branches.'),
-    dragDrop('q_dup_if_02', 'DUPLICATE_IF_ELSE_CONDITION', 'conditional_logic', 'Beginner',
-        ['if (age >= 18) {', '    System.out.println("Adult");', '} else if (age >= 13) {', '    System.out.println("Teen");', '} else {', '    System.out.println("Child");', '}'],
-        [0, 1, 2, 3, 4, 5, 6], ['Three distinct age ranges.', 'No duplicate conditions.', 'Structure: adult, teen, child.'],
-        'Age brackets use unique non-overlapping conditions.'),
-    dragDrop('q_dup_if_03', 'DUPLICATE_IF_ELSE_CONDITION', 'conditional_logic', 'Intermediate',
-        ['if (temp > 30) {', '    System.out.println("Hot");', '} else if (temp > 20) {', '    System.out.println("Warm");', '} else if (temp > 10) {', '    System.out.println("Cool");', '} else {', '    System.out.println("Cold");', '}'],
-        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], ['Four temperature ranges, each unique.', 'Order from hottest to coldest.', 'No duplicate threshold checks.'],
-        'Temperature chain uses distinct descending thresholds.'),
-    dragDrop('q_dup_if_04', 'DUPLICATE_IF_ELSE_CONDITION', 'conditional_logic', 'Intermediate',
-        ['if (x > 0) {', '    System.out.println("Positive");', '} else if (x < 0) {', '    System.out.println("Negative");', '} else {', '    System.out.println("Zero");', '}'],
-        [0, 1, 2, 3, 4, 5, 6], ['Three mutually exclusive cases.', 'x > 0, x < 0, and else for zero.', 'No overlapping conditions.'],
-        'Sign check uses three distinct non-overlapping conditions.'),
-    dragDrop('q_dup_if_05', 'DUPLICATE_IF_ELSE_CONDITION', 'conditional_logic', 'Advanced',
-        ['if (grade == \'A\') {', '    System.out.println("Excellent");', '} else if (grade == \'B\') {', '    System.out.println("Good");', '} else if (grade == \'C\') {', '    System.out.println("Average");', '} else {', '    System.out.println("Needs improvement");', '}'],
-        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], ['Each letter grade checked once.', 'No duplicate grade == conditions.', 'Four cases plus default else.'],
-        'Letter grade chain with unique == checks for A, B, C and else.'),
 
     // ── 15. WHILE_VARIABLE_NOT_UPDATED (5) ───────────────────────────────────
     bugHunt('q_while_upd_01', 'WHILE_VARIABLE_NOT_UPDATED', 'loop_termination', 'Beginner',

@@ -115,12 +115,39 @@ function gradeAnswer(question, submittedAnswer) {
     }
 
     if (gameType === 'DragDrop') {
-        const correct =
-            Array.isArray(submittedAnswer) &&
-            Array.isArray(correctAnswer) &&
-            submittedAnswer.length === correctAnswer.length &&
-            submittedAnswer.every((value, index) => String(value) === String(correctAnswer[index]));
-        return { correct, gameType };
+        // Compare the resulting CODE, not the index sequence.
+        //
+        // A switch with two `break;` lines has two identical entries, and they
+        // are interchangeable by definition: swapping them produces character
+        // for character the same program. Comparing indices marked one of those
+        // arrangements wrong, which is unanswerable - the student is looking at
+        // a correct solution being told it is not.
+        //
+        // What is being assessed is whether the code ends up right, so that is
+        // what is checked.
+        if (!Array.isArray(submittedAnswer) || !Array.isArray(correctAnswer)) {
+            return { correct: false, gameType };
+        }
+        if (submittedAnswer.length !== correctAnswer.length) {
+            return { correct: false, gameType };
+        }
+
+        const lines = question.codeLines || [];
+
+        // An index outside the lines resolves to undefined on both sides and
+        // could compare equal by accident, so the submission is bounds-checked.
+        const inRange = submittedAnswer.every(
+            (value) => Number.isInteger(Number(value)) && lines[Number(value)] !== undefined
+        );
+
+        // Compared element by element rather than joined. Any separator would
+        // have to be a string that cannot occur in Java source, and picking one
+        // is a needless thing to have to be right about.
+        const matches = submittedAnswer.every(
+            (value, position) => lines[Number(value)] === lines[Number(correctAnswer[position])]
+        );
+
+        return { correct: inRange && matches, gameType };
     }
 
     if (gameType === 'CodeTrace') {

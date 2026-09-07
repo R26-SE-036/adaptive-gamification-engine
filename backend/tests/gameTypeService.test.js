@@ -13,13 +13,19 @@ const assert = require('node:assert');
 
 const { demandOf, chooseGameType } = require('../services/gameTypeService');
 
-/** Run the chooser against a fixed set of available formats. */
-function choose(available, sessions) {
+/**
+ * Run the chooser against a fixed set of available formats.
+ *
+ * `formatCounts` is what the student has played across ALL concepts, which only
+ * G1 consults. Defaulting it to empty keeps every other case a pure rule test.
+ */
+function choose(available, sessions, formatCounts = []) {
     return chooseGameType({
         userId: 'u1',
         conceptTag: 'loop_boundaries',
         sessions,
-        available
+        available,
+        formatCounts
     });
 }
 
@@ -45,10 +51,36 @@ test('an unknown format sits in the middle rather than at an extreme', () => {
 
 /* ── The rules ───────────────────────────────────────────────────────────── */
 
-test('G1: a first round starts at the lowest demand', async () => {
+test('G1: a student who has played nothing at all starts at the lowest demand', async () => {
     const result = await choose(['BugHunt', 'CodeFix'], []);
     assert.strictEqual(result.gameType, 'BugHunt');
     assert.strictEqual(result.rule, 'G1_start_low');
+});
+
+test('G1: a new concept is met in the format played least elsewhere', async () => {
+    // Why this rule exists: the old one always picked the lowest demand, and 8
+    // of the 14 concepts have BugHunt at the bottom - so a student saw BugHunt
+    // on most concepts and never met CodeFix at all until they had passed
+    // something. Variety across concepts is the point.
+    const result = await choose(['BugHunt', 'CodeFix'], [], [{ _id: 'BugHunt', n: 6 }]);
+
+    assert.strictEqual(result.gameType, 'CodeFix');
+    assert.strictEqual(result.rule, 'G1_least_played_format');
+});
+
+test('G1 still respects what the bank can serve', async () => {
+    // Played CodeFix a lot elsewhere, but this concept has no CodeFix questions.
+    const result = await choose(['BugHunt'], [], [{ _id: 'CodeFix', n: 9 }]);
+    assert.strictEqual(result.gameType, 'BugHunt');
+});
+
+test('G1 breaks a tie by demand, so an even history still starts low', async () => {
+    const result = await choose(
+        ['BugHunt', 'CodeFix'],
+        [],
+        [{ _id: 'BugHunt', n: 4 }, { _id: 'CodeFix', n: 4 }],
+    );
+    assert.strictEqual(result.gameType, 'BugHunt');
 });
 
 test('G2: failing at production steps down to recognition', async () => {

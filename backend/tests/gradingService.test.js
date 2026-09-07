@@ -140,14 +140,47 @@ test('BugHunt compares the line index, as a string either way round', () => {
     assert.strictEqual(gradeAnswer(question, 3).correct, false);
 });
 
-test('DragDrop compares the whole ordering', () => {
-    const question = { id: 'q', gameType: 'DragDrop', correctAnswer: [1, 2, 0] };
+test('DragDrop compares the resulting code, not the index sequence', () => {
+    // Three distinct lines, so ordering and code agree exactly.
+    const question = {
+        id: 'q',
+        gameType: 'DragDrop',
+        codeLines: ['b();', 'c();', 'a();'],
+        correctAnswer: [2, 0, 1],
+    };
 
-    assert.strictEqual(gradeAnswer(question, [1, 2, 0]).correct, true);
-    assert.strictEqual(gradeAnswer(question, ['1', '2', '0']).correct, true);
-    assert.strictEqual(gradeAnswer(question, [1, 0, 2]).correct, false);
-    assert.strictEqual(gradeAnswer(question, [1, 2]).correct, false);
+    assert.strictEqual(gradeAnswer(question, [2, 0, 1]).correct, true);
+    assert.strictEqual(gradeAnswer(question, ['2', '0', '1']).correct, true, 'string indices');
+    assert.strictEqual(gradeAnswer(question, [0, 1, 2]).correct, false, 'wrong order');
+    assert.strictEqual(gradeAnswer(question, [2, 0]).correct, false, 'too short');
     assert.strictEqual(gradeAnswer(question, 'not an array').correct, false);
+});
+
+test('DragDrop accepts either arrangement of two identical lines', () => {
+    // A switch with two `break;` lines: swapping them produces the same
+    // program, so marking one arrangement wrong would reject a correct answer.
+    const question = {
+        id: 'q',
+        gameType: 'DragDrop',
+        codeLines: ['break;', 'a();', 'break;', 'b();'],
+        correctAnswer: [1, 0, 3, 2],
+    };
+
+    assert.strictEqual(gradeAnswer(question, [1, 0, 3, 2]).correct, true);
+    assert.strictEqual(gradeAnswer(question, [1, 2, 3, 0]).correct, true, 'breaks swapped');
+    assert.strictEqual(gradeAnswer(question, [1, 0, 2, 3]).correct, false, 'genuinely wrong');
+});
+
+test('DragDrop refuses an index that is not a line', () => {
+    const question = {
+        id: 'q',
+        gameType: 'DragDrop',
+        codeLines: ['a();', 'b();'],
+        correctAnswer: [1, 0],
+    };
+
+    assert.strictEqual(gradeAnswer(question, [1, 9]).correct, false, 'out of range');
+    assert.strictEqual(gradeAnswer(question, [1, 'x']).correct, false, 'not a number');
 });
 
 test('CodeTrace ignores case and surrounding space', () => {

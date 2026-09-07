@@ -13,6 +13,17 @@ const { chooseGameType } = require('../services/gameTypeService');
 const { recommendSupport } = require('../services/supportService');
 const { sendGameSummary, summaryFrom } = require('../services/studyGuiderClient');
 const ruleConfig = require('../services/ruleConfigService');
+
+/**
+ * How many of a student's recent rounds on a concept are checked before serving
+ * another question from it.
+ *
+ * Six is a little over one pass of a five-question slot, so a student works
+ * through what exists before anything comes round again. Higher would exhaust
+ * the smaller slots and fall back to repeating anyway, just after a longer
+ * query.
+ */
+const RECENT_QUESTION_MEMORY = Number(process.env.RECENT_QUESTION_MEMORY || 6);
 const { CONCEPT_GAME_MAPPING, GAME_TYPES, DIFFICULTY_LEVELS, DIFFICULTY_ALIASES } = require('../config/constants');
 
 function getAuthenticatedUserId(req) {
@@ -152,27 +163,53 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
             difficultyWasExploratory = prediction.wasExploratory === true;
         }
 
+        // ── Don't serve a question they have just seen ───────────────────────
+        //
+        // The selection was `$sample: { size: 1 }` with no memory, so the same
+        // question could come back immediately - and 78 of the bank's 112
+        // (concept, level, format) slots hold exactly ONE question, which makes
+        // a repeat certain on the second visit rather than merely likely.
+        //
+        // More questions is the real fix and it is an authoring job. Excluding
+        // what they have recently played costs one indexed query and makes the
+        // 150 that exist go much further.
+        //
+        // EXCLUSION IS A PREFERENCE, NOT A FILTER. Every query below falls back
+        // to ignoring it, because "you have seen them all" must mean "here is
+        // one again", never "no game for you".
+        const recentlyPlayed = await GameSession.find({ userId, conceptTag })
+            .sort({ completedAt: -1 })
+            .limit(RECENT_QUESTION_MEMORY)
+            .select('questionId')
+            .lean();
+
+        const seen = [...new Set(recentlyPlayed.map((row) => row.questionId).filter(Boolean))];
+
+        /** One question matching `match`, preferring one not recently seen. */
+        const pick = async (match) => {
+            if (seen.length > 0) {
+                const fresh = await QuestionBank.aggregate([
+                    { $match: { ...match, id: { $nin: seen } } },
+                    { $sample: { size: 1 } }
+                ]);
+                if (fresh.length > 0) return fresh;
+            }
+
+            return QuestionBank.aggregate([{ $match: match }, { $sample: { size: 1 } }]);
+        };
+
         let questions = resolvedGameType && resolvedDifficulty
-            ? await QuestionBank.aggregate([
-                { $match: { gameType: resolvedGameType, conceptTag, difficulty: resolvedDifficulty } },
-                { $sample: { size: 1 } }
-            ])
+            ? await pick({ gameType: resolvedGameType, conceptTag, difficulty: resolvedDifficulty })
             : [];
 
         // Same type, any difficulty, before giving up on the type entirely.
         if (questions.length === 0 && resolvedGameType) {
-            questions = await QuestionBank.aggregate([
-                { $match: { gameType: resolvedGameType, conceptTag } },
-                { $sample: { size: 1 } }
-            ]);
+            questions = await pick({ gameType: resolvedGameType, conceptTag });
         }
 
         if (questions.length === 0) {
             // fallback logic if exact match not found
-            questions = await QuestionBank.aggregate([
-                { $match: { conceptTag } },
-                { $sample: { size: 1 } }
-            ]);
+            questions = await pick({ conceptTag });
             
             if (questions.length === 0) {
                  return res.status(404).json({ error: 'No matching game found in database' });

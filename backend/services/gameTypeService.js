@@ -69,6 +69,9 @@ const DEMAND = {
 
 const demandOf = (gameType) => DEMAND[gameType] ?? 2;
 
+/** 'loop_boundaries' -> 'loop boundaries'. */
+const label = (conceptTag) => String(conceptTag || '').replace(/_/g, ' ');
+
 /** Which formats the bank can actually serve for this concept. */
 async function availableFormats(conceptTag) {
     const rows = await QuestionBank.aggregate([
@@ -99,14 +102,24 @@ function averageByFormat(sessions) {
 /**
  * Choose the format for this student's next round on this concept.
  *
- * `sessions` and `available` may be supplied by a caller that already holds
- * them - the game route does - which saves two queries on the path of a student
- * waiting for a game, and lets the rule be tested without a database.
+ * `sessions`, `available` and `formatCounts` may be supplied by a caller that
+ * already holds them - which saves queries on the path of a student waiting for
+ * a game, and lets the rule be tested without a database.
+ *
+ * `formatCounts` is how many rounds this student has played of each format
+ * ACROSS ALL CONCEPTS. Only G1 needs it, so it is fetched lazily rather than on
+ * every call.
  *
  * @returns {Promise<{gameType: string, rule: string, reason: string,
  *                    available: string[], averages: Record<string, number>}>}
  */
-async function chooseGameType({ userId, conceptTag, sessions, available: given }) {
+async function chooseGameType({
+    userId,
+    conceptTag,
+    sessions,
+    available: given,
+    formatCounts
+}) {
     const available = given || (await availableFormats(conceptTag));
 
     // Nothing in the bank for this concept: hand back the mapping's answer so
@@ -136,14 +149,48 @@ async function chooseGameType({ userId, conceptTag, sessions, available: given }
         Array.from(averages, ([gameType, average]) => [gameType, Math.round(average)])
     );
 
-    // ── G1: nothing played yet - start at the lowest demand ──────────────────
+    // ── G1: nothing played on THIS concept yet ───────────────────────────────
+    //
+    // This used to return `available[0]` - always the lowest demand. That was
+    // right in isolation and wrong in aggregate: 8 of the 14 concepts have
+    // BugHunt as their lowest rung, so a new student was served BugHunt on 57%
+    // of concepts and never saw CodeFix at all until they had passed something.
+    // "I only see Bug Hunt" was the entirely predictable result.
+    //
+    // The fix is to look at what they have played ANYWHERE, not just here. A
+    // student who has done three rounds of BugHunt on other concepts meets a
+    // new concept in a format they have not seen yet, which is both more varied
+    // and a better read on them - the same idea in a new form tells you more
+    // than the fourth repetition of one form.
+    //
+    // Recognise-before-produce still holds as the tie-break: with nothing played
+    // anywhere, `available` is ordered by demand and the first is still lowest.
     if (attempted.length === 0) {
+        const playedAnywhere =
+            formatCounts ||
+            (await GameSession.aggregate([
+                { $match: { userId } },
+                { $group: { _id: '$gameType', n: { $sum: 1 } } }
+            ]));
+
+        const timesPlayed = new Map(playedAnywhere.map((row) => [row._id, row.n]));
+        const seenAnything = timesPlayed.size > 0;
+
+        // Least-played first; demand order breaks ties, so a brand-new student
+        // still starts at the bottom of the ladder.
+        const pick = [...available].sort(
+            (a, b) =>
+                (timesPlayed.get(a) ?? 0) - (timesPlayed.get(b) ?? 0) ||
+                demandOf(a) - demandOf(b)
+        )[0];
+
         return {
-            gameType: available[0],
-            rule: 'G1_start_low',
-            reason:
-                `First round on ${conceptTag.replace(/_/g, ' ')}, so it starts with ` +
-                `${available[0]}.`,
+            gameType: pick,
+            rule: seenAnything ? 'G1_least_played_format' : 'G1_start_low',
+            reason: seenAnything
+                ? `First round on ${label(conceptTag)}. ${pick} is the format you have ` +
+                  `played least, so it is the one worth seeing here.`
+                : `First round on ${label(conceptTag)}, so it starts with ${pick}.`,
             available,
             averages: asObject
         };

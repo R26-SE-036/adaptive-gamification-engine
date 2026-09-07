@@ -270,6 +270,63 @@ was logged rather than lost silently.
 Writes are idempotent — `MERGE` on the engine's own session id — so a retry
 cannot double-count.
 
+### The question bank was worse than the code
+
+An audit of all 150 questions, prompted by a student noticing that answers
+looked wrong. The code was fine; the **content** was not, and the damage was
+confined to one game.
+
+**Drag & Drop: 17 of 20 questions were unplayable.**
+
+| | |
+|---|---|
+| 8 | **Unwinnable.** `correctAnswer` listed more entries than the question had lines — `q_switch_02` had 6 lines and an answer of `[0,1,2,3,4,5,6]`. Grading compares lengths first, so no submission could ever match. Every attempt scored 0. |
+| 9 | **Nothing to rearrange.** The answer was the identity permutation, and the UI starts the student in exactly that order — so pressing Submit without touching anything scored 100. |
+| 3 | actually playable |
+
+The cause is visible in the old file: the answers were sequential integers with
+no relation to the content — `[0,1,2,3,4,5,6,7,8,9]` against a six-line
+question. They had never been derived from the code at all.
+
+Bug Hunt (40), Code Trace (15) and CodeFix (75) were checked the same way and
+are sound. I verified the Code Trace answers against Java semantics by hand.
+
+**All 20 are re-authored.** A question is now written as the code in its correct
+order plus a shuffle, and both stored fields are *derived* — so the answer
+cannot disagree with the lines, because nobody writes it. The seeder refuses to
+run on a non-permutation or an identity, and `tests/dragDropQuestions.test.js`
+asserts the same properties, including running every stored answer through the
+real grader. Live bank after re-seeding: **0 unwinnable, 0 trivial, 20 playable.**
+
+Grading changed with it. Drag & Drop now compares the **resulting code** rather
+than the index sequence, because a switch with two `break;` lines has two
+interchangeable entries — swapping them produces character-for-character the
+same program, and marking one arrangement wrong shows a student a correct
+solution and rejects it.
+
+### Two things that made the games feel repetitive
+
+**Every new concept opened with Bug Hunt.** The format rule started each concept
+at the lowest cognitive demand, and 8 of the 14 concepts have Bug Hunt at the
+bottom — so a new student met Bug Hunt on 57% of concepts and **never saw
+CodeFix at all** until they had passed something. The rule now picks the format
+that student has played *least across all concepts*, with demand order as the
+tie-break, so a genuinely new student still starts low but a returning one meets
+new ground in a form they have not seen.
+
+**The same question came back immediately.** Selection was a random sample with
+no memory, and **78 of the bank's 112 populated (concept, level, format) slots
+hold exactly one question** — so a repeat was certain on the second visit, not
+merely likely. The query now prefers a question the student has not played in
+their last 6 rounds on that concept. Measured over six consecutive rounds on a
+four-question slot: four distinct questions, then a repeat only once the slot
+was exhausted. Exclusion is a preference, never a filter — "you have seen them
+all" must mean "here is one again", not "no game for you".
+
+**The real fix for diversity is more questions.** 78 single-question slots is
+the underlying problem, and it is an authoring job of roughly 180 more questions
+to reach three per slot.
+
 ### FR-15, and the word "administrators"
 
 The proposal says thresholds shall be configurable *"by authorised
