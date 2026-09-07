@@ -41,8 +41,7 @@ async function authMiddleware(req, res, next) {
             ...user,
             userId: user.user_id,
             user_id: user.user_id,
-            fullName: user.full_name,
-            role: user.role || 'student'
+            fullName: user.full_name
         };
         // Routes forward this to Code Coach when they need the student's own
         // data, so authorization is carried rather than re-derived.

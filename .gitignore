@@ -2,9 +2,6 @@
 node_modules/
 
 # Environment Variables & Secrets (CRITICAL)
-.env
-backend/.env
-ml-service/.env
 **/.env
 
 # Python specific
@@ -12,28 +9,27 @@ ml-service/.env
 # (its launcher scripts hardcode absolute paths, so a committed one is broken
 # the moment anyone checks it out somewhere else) and it dwarfs the real
 # source - 339 files against 2 in one careless `git add -A`.
-.venv/
-venv/
 **/.venv/
 **/venv/
 __pycache__/
 *.pyc
+.pytest_cache/
 *.pkl
-ml-service/__pycache__/
-ml-service/*.pkl
 
 # ...except the one the ML service exists to serve. Without model.pkl in the
 # checkout, /predict answers 500 "Model not trained yet" and the backend falls
 # through to its heuristic - which is what happened for the whole project, so
-# the Random Forest never actually ran. Both this rule and ml-service/.gitignore
-# excluded it; a negation is needed in each, because git applies the nested file
-# too and a re-include in only one of them still leaves the file ignored.
-!ml-service/model.pkl
+# the Random Forest never actually ran.
+#
+# One negation is enough now that the ML code lives under backend/ml and no
+# longer carries a .gitignore of its own. There used to be two rules and two
+# files, because git applies a nested .gitignore too and re-including the file
+# in only one of them still left it ignored.
+!backend/ml/model.pkl
 
 # Build outputs
 dist/
 build/
-frontend/dist/
 
 # System files
 .DS_Store

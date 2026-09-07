@@ -3,36 +3,20 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 require('dotenv').config();
 
-// Optional DNS override, off unless DNS_SERVERS is set.
-//
-// On some Windows machines Node's resolver library cannot read the system DNS
-// configuration and silently falls back to 127.0.0.1, where nothing is
-// listening. Every lookup then fails with ECONNREFUSED - including the SRV
-// lookup that a mongodb+srv:// Atlas URI depends on, so MongoDB never connects
-// while every other tool on the machine resolves names perfectly.
-//
-// Setting DNS_SERVERS (e.g. to your router, 192.168.1.1) points Node at a
-// resolver that works. Unset, nothing changes.
-if (process.env.DNS_SERVERS) {
-    const dns = require('dns');
-    const servers = process.env.DNS_SERVERS.split(',').map((s) => s.trim()).filter(Boolean);
-    try {
-        dns.setServers(servers);
-        console.log(`DNS resolvers overridden: ${servers.join(', ')}`);
-    } catch (err) {
-        console.warn(`Ignoring invalid DNS_SERVERS (${err.message})`);
-    }
-}
+// Must run before anything opens a mongodb+srv:// connection.
+require('./config/dns').applyDnsOverride();
 
 const { CODE_COACH_URL } = require('./services/codeCoachClient');
 
 const app = express();
 
-// Browsers that may call this API. The frontend dev server is 5174 and the
-// Code Guru portal is 4200. Comes from the environment so a deployed origin can
-// be added without a code change.
+// Browsers that may call this API. Only the Code Guru web app on 4200 - this
+// component's own Vite frontend on 5174 has been removed, and leaving a deleted
+// app's origin on the allow-list grants it to whatever binds that port next.
+// Comes from the environment so a deployed origin can be added without a code
+// change.
 const allowedOrigins = (process.env.CORS_ORIGINS ||
-    'http://localhost:5174,http://127.0.0.1:5174,http://localhost:4200,http://127.0.0.1:4200')
+    'http://localhost:4200,http://127.0.0.1:4200')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
@@ -45,6 +29,12 @@ app.use(express.json());
 // middleware/auth.js. A local password login used to live at /api/v1/auth,
 // unmounted but present; it was a second identity system waiting to be
 // switched on, and has been removed.
+// Rule configuration, mounted BEFORE the gamification router and therefore
+// outside its student-auth middleware. An operator changing a threshold is not
+// acting as a student and should not need a student's token; the endpoints are
+// gated by RULE_CONFIG_SECRET instead. See routes/ruleConfig.js.
+app.use('/api/v1/gamification/rules', require('./routes/ruleConfig'));
+
 const gamificationRoutes = require('./routes/gamification');
 app.use('/api/v1/gamification', gamificationRoutes);
 
@@ -55,6 +45,15 @@ app.get('/health', (req, res) => {
         database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
         identity_provider: CODE_COACH_URL
     });
+});
+
+// Load the stored thresholds once the database is up, so the first request
+// does not run on defaults while the lazy refresh is still in flight.
+mongoose.connection.once('open', () => {
+    require('./services/ruleConfigService')
+        .refresh()
+        .then(() => console.log('Rule configuration loaded'))
+        .catch((error) => console.warn(`Rule configuration unavailable: ${error.message}`));
 });
 
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/code-guru';
