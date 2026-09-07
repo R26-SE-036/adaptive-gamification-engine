@@ -13,6 +13,8 @@ const { chooseGameType } = require('../services/gameTypeService');
 const { recommendSupport } = require('../services/supportService');
 const { sendGameSummary, summaryFrom } = require('../services/studyGuiderClient');
 const ruleConfig = require('../services/ruleConfigService');
+const AdaptationDecision = require('../models/AdaptationDecision');
+const { permittedBand } = require('../services/progressionService');
 
 /**
  * How many of a student's recent rounds on a concept are checked before serving
@@ -151,6 +153,12 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
         let difficultyConfidence = null;
         let difficultyWasExploratory = false;
 
+        // Recorded so the decision can later be checked against what happened.
+        // Null when the caller NAMED a level: there is no adaptation decision to
+        // evaluate in that case, and storing one would put rows the engine did
+        // not choose into a measurement of how well the engine chooses.
+        let decisionId = null;
+
         if (!resolvedDifficulty) {
             const prediction = await predictDifficulty({
                 userId,
@@ -161,6 +169,35 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
             difficultyChosenBy = prediction.source;
             difficultyConfidence = prediction.confidence;
             difficultyWasExploratory = prediction.wasExploratory === true;
+
+            // Best effort: a student waiting for a game must not lose it
+            // because an analytics write failed.
+            try {
+                const decision = await AdaptationDecision.create({
+                    userId,
+                    conceptTag,
+                    difficulty: prediction.difficulty,
+                    gameType: resolvedGameType,
+                    source: prediction.source,
+                    confidence: prediction.confidence ?? null,
+                    predictedSuccess: prediction.predictedSuccess ?? null,
+                    permittedBand: prediction.progression
+                        ? permittedBand(prediction.progression)
+                        : [],
+                    progressionLevel: prediction.progression?.level,
+                    progressionPrevious: prediction.progression?.previousLevel,
+                    progressionMoved: prediction.progression?.moved ?? null,
+                    reason: prediction.reason || prediction.progression?.reason || '',
+                    repeatErrorCount: prediction.repeatErrorCount ?? null,
+                    features: prediction.features ?? null,
+                    modelVersion: prediction.modelVersion ?? null,
+                    extrapolated: prediction.extrapolated ?? [],
+                    wasExploratory: prediction.wasExploratory === true
+                });
+                decisionId = decision.decisionId;
+            } catch (error) {
+                console.warn(`[decision] Could not record the decision: ${error.message}`);
+            }
         }
 
         // ── Don't serve a question they have just seen ───────────────────────
@@ -259,6 +296,10 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
         // not already have, and it is worthless to the trainer if the row that
         // records the outcome does not say so.
         safeQuestion.wasExploratory = difficultyWasExploratory;
+
+        // Echoed back on submit so the outcome can be joined to the decision
+        // that produced it. See models/AdaptationDecision.js.
+        safeQuestion.decisionId = decisionId;
 
         res.json(safeQuestion);
     } catch (err) {
@@ -423,7 +464,7 @@ router.post('/game/submit', async (req, res) => {
     try {
         const { userId, learningSessionId, gameType, conceptTag, selectedAnswer, 
                 hintUsage, timeTakenSeconds, attemptCount, questionId, traceAccuracy,
-                wasExploratory, dataSource } = req.body;
+                wasExploratory, dataSource, decisionId } = req.body;
 
         if (!userId || !learningSessionId || !gameType || !conceptTag || selectedAnswer === undefined || !questionId) {
             return res.status(400).json({ error: 'Missing required fields for game submission' });
@@ -553,6 +594,44 @@ router.post('/game/submit', async (req, res) => {
             dataSource: ['simulated', 'test'].includes(dataSource) ? dataSource : 'real'
         });
         await session.save();
+
+        // ── Close the loop on the adaptation decision ────────────────────────
+        //
+        // The decision was made when the game was fetched; the outcome is known
+        // now. Without this join the engine can say what it decided and what
+        // happened, but never whether the two agreed - which is the only
+        // question worth asking of a predictive model.
+        //
+        // Best effort, and never blocking: the student has their score.
+        try {
+            const outcome = {
+                outcomeScore: finalScore,
+                outcomeSuccess: finalScore >= ruleConfig.rules().scoring.passMark,
+                outcomeAt: new Date(),
+                gameSessionId: session.gameSessionId,
+                questionId
+            };
+
+            if (decisionId) {
+                await AdaptationDecision.findOneAndUpdate(
+                    { decisionId, outcomeAt: null },
+                    { $set: { ...outcome, outcomeLinkedBy: 'echo' } }
+                );
+            } else {
+                // A client that does not echo the id - anything written before
+                // this existed - falls back to the most recent unresolved
+                // decision for this student and concept. Recorded as 'inferred'
+                // so a calibration figure can say how many of its rows were
+                // guessed rather than known.
+                await AdaptationDecision.findOneAndUpdate(
+                    { userId, conceptTag, outcomeAt: null },
+                    { $set: { ...outcome, outcomeLinkedBy: 'inferred' } },
+                    { sort: { decidedAt: -1 } }
+                );
+            }
+        } catch (error) {
+            console.warn(`[decision] Could not attach the outcome: ${error.message}`);
+        }
 
         // FR-12: transmit the summary to the Progress Tracker.
         //

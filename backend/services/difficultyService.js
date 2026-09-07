@@ -316,6 +316,14 @@ async function predictDifficulty({ userId, conceptTag, accessToken }) {
             predictedSuccess: response.data?.predicted_success ?? null,
             policy: response.data?.policy ?? null,
             reportable: response.data?.reportable ?? false,
+            // Carried through for the decision log. Which model produced a
+            // prediction, and whether it was asked about a level it had never
+            // been fitted on, are both things a calibration figure has to be
+            // able to filter on - a refit silently invalidates every earlier
+            // row, and an extrapolated prediction is not evidence about
+            // anything.
+            modelVersion: response.data?.model_version ?? null,
+            extrapolated: response.data?.extrapolated_difficulties ?? [],
             features,
             repeatErrorCount,
             wasExploratory: false,
