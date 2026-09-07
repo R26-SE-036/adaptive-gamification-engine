@@ -26,7 +26,8 @@ const { permittedBand } = require('../services/progressionService');
  * query.
  */
 const RECENT_QUESTION_MEMORY = Number(process.env.RECENT_QUESTION_MEMORY || 6);
-const { CONCEPT_GAME_MAPPING, GAME_TYPES, DIFFICULTY_LEVELS, DIFFICULTY_ALIASES } = require('../config/constants');
+const { CONCEPT_GAME_MAPPING, GAME_TYPES, DIFFICULTY_LEVELS, DIFFICULTY_ALIASES,
+        nearestDifficulty } = require('../config/constants');
 
 function getAuthenticatedUserId(req) {
     return req.user?.user_id || req.user?.userId || req.user?.id || req.user?.sub || null;
@@ -243,15 +244,41 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
             ? await pick({ gameType: resolvedGameType, conceptTag, difficulty: resolvedDifficulty })
             : [];
 
-        // Same type, any difficulty, before giving up on the type entirely.
-        if (questions.length === 0 && resolvedGameType) {
-            questions = await pick({ gameType: resolvedGameType, conceptTag });
+        // ── Falling back to the NEAREST level, not to any level ──────────────
+        //
+        // The bank does not cover every cell: only CodeFix was authored across
+        // all five levels, so an Elementary Bug Hunt on array_indexing simply
+        // does not exist. This used to fall through to "same type, any
+        // difficulty", which could hand that student an Advanced question - and
+        // because the session is recorded at the SERVED level and
+        // progressionService reads that back as where the student is, the
+        // fallback was quietly promoting people. See nearestDifficulty().
+        if (questions.length === 0 && resolvedGameType && resolvedDifficulty) {
+            const available = await QuestionBank.distinct('difficulty', {
+                gameType: resolvedGameType,
+                conceptTag
+            });
+
+            const nearest = nearestDifficulty(resolvedDifficulty, available);
+            if (nearest) {
+                questions = await pick({
+                    gameType: resolvedGameType,
+                    conceptTag,
+                    difficulty: nearest
+                });
+            }
         }
 
+        // Type unresolved, or the type has nothing at all for this concept.
         if (questions.length === 0) {
-            // fallback logic if exact match not found
-            questions = await pick({ conceptTag });
-            
+            if (resolvedDifficulty) {
+                const available = await QuestionBank.distinct('difficulty', { conceptTag });
+                const nearest = nearestDifficulty(resolvedDifficulty, available);
+                if (nearest) questions = await pick({ conceptTag, difficulty: nearest });
+            }
+
+            if (questions.length === 0) questions = await pick({ conceptTag });
+
             if (questions.length === 0) {
                  return res.status(404).json({ error: 'No matching game found in database' });
             }

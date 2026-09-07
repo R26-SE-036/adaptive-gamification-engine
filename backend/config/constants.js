@@ -93,6 +93,48 @@ const DIFFICULTY_ALIASES = {
     hard: 'Advanced'
 };
 
+/**
+ * The closest level to `target` that actually exists in `available`.
+ *
+ * ===================== WHY THE FALLBACK NEEDED A RULE =====================
+ * The question bank does not cover every (concept, format, level) cell. CodeFix
+ * was authored across all five levels; BugHunt, DragDrop and CodeTrace exist
+ * only at Beginner, Intermediate and Advanced - so asking for an Elementary Bug
+ * Hunt on array_indexing matches nothing.
+ *
+ * The fallback for that used to be "same type, ANY difficulty", which is not a
+ * near miss but a random one, and it was not merely a worse game. The session is
+ * recorded at the level of the question actually served, and
+ * progressionService reads that back as the level the student is ON. So a
+ * student the rule held at Elementary could be handed an Intermediate question
+ * because no Elementary one existed, and the next evaluation would treat
+ * Intermediate as their current level - a promotion without the two consecutive
+ * sessions FR-08 exists to require, arriving through a gap in the DATA rather
+ * than a bug in the rule.
+ *
+ * Ties break DOWNWARD. One level too easy costs a round; one level too hard is
+ * the bad experience the whole component exists to avoid, and it is the
+ * direction that silently moves a student up the ladder.
+ */
+function nearestDifficulty(target, available) {
+    const targetIndex = difficultyIndex(resolveDifficulty(target));
+    if (targetIndex < 0) return null;
+
+    const candidates = (available || [])
+        .map((value) => resolveDifficulty(value))
+        .filter((value) => value !== null);
+
+    if (candidates.length === 0) return null;
+
+    return candidates.reduce((best, level) => {
+        const distance = Math.abs(difficultyIndex(level) - targetIndex);
+        const bestDistance = Math.abs(difficultyIndex(best) - targetIndex);
+
+        if (distance !== bestDistance) return distance < bestDistance ? level : best;
+        return difficultyIndex(level) < difficultyIndex(best) ? level : best;
+    });
+}
+
 /** Resolve any known spelling to a level on the ladder, or null. */
 function resolveDifficulty(value) {
     if (DIFFICULTY_LEVELS.includes(value)) return value;
@@ -143,6 +185,7 @@ module.exports = {
     difficultyIndex,
     difficultyAt,
     resolveDifficulty,
+    nearestDifficulty,
     GAME_SESSION_STATUSES,
     CONCEPT_GAME_MAPPING
 };
