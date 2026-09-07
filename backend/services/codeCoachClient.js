@@ -72,6 +72,67 @@ function cacheSet(token, user) {
     tokenCache.set(token, { user, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
 }
 
+/**
+ * Struggling concepts, cached briefly.
+ *
+ * ============================ WHY THIS MATTERS =============================
+ * Token verification was cached and this was not, and this is the expensive
+ * one. Measured on the difficulty decision:
+ *
+ *     the Random Forest making its prediction        7 ms
+ *     reading the student's history from Atlas     123 ms
+ *     asking Code Coach for the struggle count     556 ms   <- uncached
+ *     total                                        639 ms
+ *
+ * NFR-01 budgets 200 ms for the whole decision. The single largest cost in it
+ * was a call being made in full on every game, for a number that changes only
+ * when the student writes code - which they are not doing while playing one.
+ *
+ * The TTL is the trade, and it is a mild one: a struggle resolved in the editor
+ * takes up to this long to affect the difficulty guard. That guard exists to
+ * stop a struggling student being handed a hard game, and being slightly slow
+ * to notice they have STOPPED struggling errs in the safe direction.
+ *
+ * Keyed by token rather than by user id because that is what the caller has.
+ * The token already identifies one student, and a re-issued token simply misses
+ * the cache once.
+ */
+const STRUGGLE_CACHE_TTL_MS = Number(process.env.STRUGGLE_CACHE_TTL_MS || 30_000);
+
+const struggleCache = new Map();
+
+function struggleCacheKey(token, limit) {
+    return `${token}::${limit}`;
+}
+
+function struggleCacheGet(key) {
+    const entry = struggleCache.get(key);
+    if (!entry) return null;
+
+    if (entry.expiresAt < Date.now()) {
+        struggleCache.delete(key);
+        return null;
+    }
+    return entry.struggles;
+}
+
+function struggleCacheSet(key, struggles) {
+    if (struggleCache.size > 512) struggleCache.clear();
+    struggleCache.set(key, { struggles, expiresAt: Date.now() + STRUGGLE_CACHE_TTL_MS });
+}
+
+/**
+ * Drop a student's cached struggles.
+ *
+ * Called when this engine does something that could change them, so the next
+ * decision sees the new state rather than waiting out the TTL.
+ */
+function forgetStruggles(token) {
+    for (const key of struggleCache.keys()) {
+        if (key.startsWith(`${token}::`)) struggleCache.delete(key);
+    }
+}
+
 function detailFrom(error) {
     const data = error?.response?.data;
     if (typeof data?.detail === 'string') return data.detail;
@@ -127,21 +188,32 @@ async function verifyToken(accessToken) {
  * the recommended action.
  */
 async function getStrugglingConcepts(accessToken, limit = 20) {
+    const key = struggleCacheKey(accessToken, limit);
+
+    const cached = struggleCacheGet(key);
+    if (cached) return cached;
+
     const payload = await request('get', '/api/v1/students/me/struggling-concepts', accessToken, {
         params: { limit }
     });
-    return payload?.struggles || [];
+
+    const struggles = payload?.struggles || [];
+    struggleCacheSet(key, struggles);
+    return struggles;
 }
 
 /** Drop a cached token (used on sign-out). */
 function forgetToken(accessToken) {
     tokenCache.delete(accessToken);
+    forgetStruggles(accessToken);
 }
 
 module.exports = {
     CODE_COACH_URL,
+    STRUGGLE_CACHE_TTL_MS,
     CodeCoachError,
     verifyToken,
     getStrugglingConcepts,
+    forgetStruggles,
     forgetToken
 };

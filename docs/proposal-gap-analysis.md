@@ -148,7 +148,7 @@ heuristic and the model is future work.
 
 | # | Requirement | Status |
 |---|---|---|
-| NFR-01 | Decision in under 200 ms | **Fails — 639 ms** (see §5) |
+| NFR-01 | Decision in under 200 ms | **Passes warm — 155 ms** (see §5) |
 | NFR-02 | 50 concurrent sessions | **Passes** — 50/50 succeeded, no degradation |
 | NFR-03 | 85% decision accuracy | **Cannot be claimed** (see §3) |
 | NFR-04 | SUS above 68 | Not testable without users |
@@ -530,12 +530,31 @@ took the median from **734 ms to 639 ms**. That is a genuine saving and it is
 committed, but it cannot get to 200 ms, because the slowest single call is 556 ms
 on its own.
 
-**This is a deployment problem, not a code problem.** Both numbers are dominated
-by the round trip from a laptop in Sri Lanka to databases hosted overseas. When
-the services and the database sit in the same region — which is what the
-docker-compose deployment does — this should drop by roughly an order of
-magnitude. **It should be re-measured there before anyone writes it up as a
-failure**, and re-measured honestly if it still fails.
+**Then the 556 ms turned out to be avoidable.** Token verification was cached
+and this call was not — and this was the expensive one, made in full on every
+game for a number that only changes when the student writes code, which they are
+not doing while playing. A 30-second cache:
+
+| | before | after |
+|---|---|---|
+| first decision (cold cache) | 639 ms | 948 ms |
+| **median of subsequent decisions** | **639 ms** | **155 ms** |
+
+**NFR-01 passes on warm decisions.** Be precise about that when writing it up:
+the *first* decision of a session still exceeds the budget, because it pays the
+Code Coach round trip in full. A student plays several rounds, so most decisions
+are warm — but "155 ms" is the median of the warm ones, not of all of them.
+
+What remains is now the MongoDB Atlas read at 138 ms, which is the round trip
+from a laptop in Sri Lanka to a cluster hosted overseas. Co-locating the service
+and the database — which the docker-compose deployment does — should take that
+down too, and **it is worth re-measuring there** rather than reporting a number
+taken from a development machine.
+
+The TTL is the trade, and it is mild: a struggle resolved in the editor takes up
+to 30 seconds to affect the difficulty guard. That guard stops a struggling
+student being handed a hard game, so being slightly slow to notice they have
+*stopped* struggling errs in the safe direction.
 
 ---
 
