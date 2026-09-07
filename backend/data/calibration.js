@@ -54,6 +54,15 @@ const AdaptationDecision = require('../models/AdaptationDecision');
 /** Below this many resolved decisions, the numbers are noise. */
 const MIN_ROWS = Number(process.env.CALIBRATION_MIN_ROWS || 100);
 
+/**
+ * How long after a game is fetched an unfinished one counts as abandoned.
+ *
+ * A decision with no outcome is either a student still playing or a student who
+ * walked away. Fifteen minutes is far longer than a round takes and short
+ * enough that yesterday's abandonments are not still counted as in-progress.
+ */
+const ABANDON_AFTER_MS = Number(process.env.ABANDON_AFTER_MS || 15 * 60 * 1000);
+
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(`--${name}`);
 const option = (name) => {
@@ -114,6 +123,45 @@ async function main() {
         `  exploratory                             : ${exploratory}` +
             (decisions.length ? ` (${((exploratory / decisions.length) * 100).toFixed(1)}%)` : '')
     );
+
+    // ── The survivorship bias, stated next to the numbers it biases ─────────
+    //
+    // Everything above is computed over COMPLETED rounds. A student who fetched
+    // an Expert game, looked at it and walked away never appears - and that is
+    // exactly the student the difficulty model most needs to know about.
+    //
+    // Abandonment is not a missing row; it is an outcome, and the engine could
+    // not see it at all before decisions were logged. Reported here rather than
+    // in a separate tool, because a calibration figure quoted without its
+    // abandonment rate is quoting the students who stayed.
+    const abandonedQuery = { ...query };
+    delete abandonedQuery.outcomeLinkedBy;
+    abandonedQuery.outcomeAt = null;
+    abandonedQuery.decidedAt = { $lt: new Date(Date.now() - ABANDON_AFTER_MS) };
+
+    const abandoned = await AdaptationDecision.find(abandonedQuery).lean();
+    const finished = decisions.length;
+    const started = finished + abandoned.length;
+
+    console.log();
+    console.log('── Abandonment ─────────────────────────────────────────────');
+    console.log(`  games fetched and finished              : ${finished}`);
+    console.log(`  fetched and never finished              : ${abandoned.length}`);
+    if (started > 0) {
+        console.log(
+            `  abandonment rate                        : ` +
+                `${((abandoned.length / started) * 100).toFixed(1)}%`
+        );
+    }
+
+    if (abandoned.length > 0) {
+        const byLevel = {};
+        for (const d of abandoned) byLevel[d.difficulty] = (byLevel[d.difficulty] || 0) + 1;
+        console.log(`  by level                                : ${JSON.stringify(byLevel)}`);
+        console.log(
+            `  NOTE: every number below is computed over finished rounds only.`
+        );
+    }
 
     if (rows.length === 0) {
         console.log('\nNothing to calibrate yet. Play some games, or relax the filters.\n');
