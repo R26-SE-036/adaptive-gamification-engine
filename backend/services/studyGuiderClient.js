@@ -41,6 +41,17 @@ const STUDY_GUIDER_URL = process.env.STUDY_GUIDER_URL || 'http://127.0.0.1:8010'
 const TIMEOUT_MS = Number(process.env.STUDY_GUIDER_TIMEOUT_MS || 5000);
 
 /**
+ * A shorter budget for the one call that a student WAITS on.
+ *
+ * Sending a summary is fire-and-forget, so five seconds costs nobody anything.
+ * Reading mastery happens while a student is waiting for their first game to
+ * load, so the timeout is the longest that read may delay it. Two and a half
+ * seconds is generous for a local call and short enough that a hung Study
+ * Guider costs a noticeable pause rather than an abandoned page.
+ */
+const READ_TIMEOUT_MS = Number(process.env.STUDY_GUIDER_READ_TIMEOUT_MS || 2500);
+
+/**
  * Whether to send at all.
  *
  * Off by an explicit `STUDY_GUIDER_SUMMARIES=off` rather than by the URL being
@@ -114,3 +125,107 @@ function summaryFrom(session, extra = {}) {
 }
 
 module.exports = { STUDY_GUIDER_URL, ENABLED, sendGameSummary, summaryFrom };
+
+
+/**
+ * ======================= READING BACK: THE COLD START =======================
+ * Everything above sends. This reads, and it is the only place this engine asks
+ * another component what it knows about a student.
+ *
+ * The problem it solves: a student who has ground through Study Guider's quizzes
+ * on `loop_boundaries` until BKT puts their mastery at 0.9 still gets handed a
+ * Beginner game the first time they play one, because this engine's evidence is
+ * its own GameSession rows and there are none. The platform knows; this
+ * component just was not asking.
+ *
+ * Two things keep that honest:
+ *
+ *   * It is used ONLY for the first game on a concept. Once this engine has its
+ *     own observations they are better evidence about games than a quiz score
+ *     is, and the seeded level survives only through the session it produced.
+ *   * It is NOT a model feature. Adding it to the feature vector would repeat
+ *     the exact defect ml/training_data.py documents: a value the serve path can
+ *     read live and the training path can only invent, because Study Guider
+ *     stores the CURRENT belief and not what it was last Tuesday.
+ */
+
+/** Cached mastery, keyed by token. See the struggle cache for the same reasoning. */
+const MASTERY_CACHE_TTL_MS = Number(process.env.MASTERY_CACHE_TTL_MS || 60_000);
+const masteryCache = new Map();
+
+/**
+ * GET /api/progress/me/mastery - this student's per-concept BKT estimates.
+ *
+ * Returns a Map of concept -> estimate, or null when Study Guider could not
+ * answer. NULL AND EMPTY MEAN DIFFERENT THINGS and the caller must keep them
+ * apart: an empty map is "this student has done no quizzes", which is evidence,
+ * while null is "we do not know", which is not.
+ *
+ * Never throws. A student starting their first game must not be blocked by
+ * another component being down.
+ */
+async function getMastery(accessToken) {
+    if (!accessToken) return null;
+
+    const cached = masteryCache.get(accessToken);
+    if (cached && cached.expiresAt > Date.now()) return cached.mastery;
+
+    try {
+        const response = await axios.get(`${STUDY_GUIDER_URL}/api/progress/me/mastery`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            timeout: READ_TIMEOUT_MS
+        });
+
+        // Study Guider answers 200 with { success: false, error } when Neo4j is
+        // unreachable, rather than a 5xx. Treating that as an empty map would
+        // turn "the graph is down" into "this student knows nothing", which is
+        // the difference between no seed and a wrong one.
+        if (response.data?.success !== true) {
+            console.warn(
+                `[study-guider] Mastery unavailable: ${response.data?.error || 'unsuccessful response'}`
+            );
+            return null;
+        }
+
+        const mastery = new Map();
+        for (const estimate of response.data.data || []) {
+            if (estimate?.concept) mastery.set(estimate.concept, estimate);
+        }
+
+        if (masteryCache.size > 512) masteryCache.clear();
+        masteryCache.set(accessToken, { mastery, expiresAt: Date.now() + MASTERY_CACHE_TTL_MS });
+
+        return mastery;
+    } catch (error) {
+        const detail = error.response
+            ? `${error.response.status} ${JSON.stringify(error.response.data)}`
+            : error.message;
+        console.warn(`[study-guider] Could not read mastery: ${detail}`);
+        return null;
+    }
+}
+
+/**
+ * One concept's estimate, or null when it is unknown or unreachable.
+ *
+ * The concept vocabulary is shared - both services key on the same fourteen
+ * tags, from Code Coach's knowledge base - so this is a direct lookup and not a
+ * fuzzy match. A tag missing from the map means the student has attempted no
+ * quizzes on it.
+ */
+async function getConceptMastery(accessToken, conceptTag) {
+    const mastery = await getMastery(accessToken);
+    if (!mastery) return null;
+    return mastery.get(conceptTag) ?? null;
+}
+
+/** Drop a student's cached mastery. */
+function forgetMastery(accessToken) {
+    masteryCache.delete(accessToken);
+}
+
+module.exports.READ_TIMEOUT_MS = READ_TIMEOUT_MS;
+module.exports.MASTERY_CACHE_TTL_MS = MASTERY_CACHE_TTL_MS;
+module.exports.getMastery = getMastery;
+module.exports.getConceptMastery = getConceptMastery;
+module.exports.forgetMastery = forgetMastery;

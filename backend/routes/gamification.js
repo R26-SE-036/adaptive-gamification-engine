@@ -152,6 +152,7 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
         let difficultyChosenBy = 'requested';
         let difficultyConfidence = null;
         let difficultyWasExploratory = false;
+        let difficultyReason = null;
 
         // Recorded so the decision can later be checked against what happened.
         // Null when the caller NAMED a level: there is no adaptation decision to
@@ -169,6 +170,7 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
             difficultyChosenBy = prediction.source;
             difficultyConfidence = prediction.confidence;
             difficultyWasExploratory = prediction.wasExploratory === true;
+            difficultyReason = prediction.reason || prediction.progression?.reason || null;
 
             // Best effort: a student waiting for a game must not lose it
             // because an analytics write failed.
@@ -189,6 +191,8 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
                     progressionMoved: prediction.progression?.moved ?? null,
                     reason: prediction.reason || prediction.progression?.reason || '',
                     repeatErrorCount: prediction.repeatErrorCount ?? null,
+                    coldStartSource: prediction.progression?.evidence?.source ?? null,
+                    coldStartEvidence: prediction.progression?.evidence ?? null,
                     features: prediction.features ?? null,
                     modelVersion: prediction.modelVersion ?? null,
                     extrapolated: prediction.extrapolated ?? [],
@@ -285,6 +289,12 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
         safeQuestion.targetDifficulty = resolvedDifficulty;
         safeQuestion.difficultyChosenBy = difficultyChosenBy;
         safeQuestion.difficultyConfidence = difficultyConfidence;
+
+        // In the student's own words, where there are any. A first game served
+        // at Intermediate because Study Guider says they know the concept is
+        // adaptation the student can be TOLD about; silently handing them a
+        // harder game than the one their friend got is just confusing.
+        safeQuestion.difficultyReason = difficultyReason;
 
         // Same contract as the difficulty fields: a UI telling a student their
         // practice adapts to them should be able to say what adapted and why.

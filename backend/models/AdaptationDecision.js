@@ -90,6 +90,29 @@ const AdaptationDecisionSchema = new mongoose.Schema(
         repeatErrorCount: { type: Number, default: null },
 
         /**
+         * For a cold start, what the opening level was seeded from:
+         * 'study_guider', 'code_coach', or 'default' for the plain Beginner.
+         *
+         * Separated from `reason`, which is prose for a student, because this is
+         * the thing an evaluation has to GROUP BY. "Do students seeded from
+         * quiz mastery pass their first game at the same rate as students who
+         * started at Beginner" is the question that says whether seeding was a
+         * good idea, and it cannot be asked of a sentence.
+         */
+        coldStartSource: { type: String, default: null, index: true },
+
+        /**
+         * The evidence behind the seed, as it stood at the moment of the
+         * decision - the mastery probability, how many observations it rested
+         * on, and any cap applied.
+         *
+         * Stored rather than re-read for the same reason `features` is: Study
+         * Guider holds the CURRENT belief, so by the time anybody evaluates this
+         * decision the number that produced it is gone.
+         */
+        coldStartEvidence: { type: mongoose.Schema.Types.Mixed, default: null },
+
+        /**
          * The feature vector the model was given.
          *
          * Stored so a prediction can be reproduced later. Without it, a row

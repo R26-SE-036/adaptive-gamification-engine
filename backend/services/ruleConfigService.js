@@ -95,6 +95,26 @@ const SCHEMA = {
         describe: 'Unresolved findings at which the fallback rule stops serving the top level.'
     },
 
+    // Where a student with no history on a concept opens. See
+    // services/coldStartService.js - and note that ceilingIndex 0 restores the
+    // proposal's literal "all students start at the Beginner level".
+    'coldStart.ceilingIndex': {
+        env: 'COLD_START_CEILING_INDEX', default: 2, min: 0, max: 4,
+        describe: 'Highest level index a first game may be seeded to. 0 disables seeding.'
+    },
+    'coldStart.masteryForElementary': {
+        env: 'COLD_START_MASTERY_ELEMENTARY', default: 0.6, min: 0, max: 1,
+        describe: 'Study Guider mastery at or above which a first game starts one level up.'
+    },
+    'coldStart.masteryForIntermediate': {
+        env: 'COLD_START_MASTERY_INTERMEDIATE', default: 0.85, min: 0, max: 1,
+        describe: 'Study Guider mastery at or above which a first game starts two levels up.'
+    },
+    'coldStart.minObservations': {
+        env: 'COLD_START_MIN_OBSERVATIONS', default: 3, min: 1, max: 50,
+        describe: 'Quiz observations needed before mastery is trusted to seed a level.'
+    },
+
     'progression.advanceAt': {
         env: 'PROGRESSION_ADVANCE_AT', default: 80, min: 1, max: 100,
         describe: 'Score at or above which a session counts toward advancing.'

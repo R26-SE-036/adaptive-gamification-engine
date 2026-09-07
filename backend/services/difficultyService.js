@@ -37,6 +37,7 @@ const axios = require('axios');
 const GameSession = require('../models/GameSession');
 const { getStrugglingConcepts } = require('./codeCoachClient');
 const { currentLevel, permittedBand } = require('./progressionService');
+const { seedStartingLevel } = require('./coldStartService');
 const { rules } = require('./ruleConfigService');
 const { DIFFICULTY_LEVELS } = require('../config/constants');
 
@@ -225,14 +226,29 @@ async function predictDifficulty({ userId, conceptTag, accessToken }) {
     // -- Where the dual-threshold rule says this student is -------------------
     // FR-08. The rule owns progression; the model chooses within the band it
     // permits. See services/progressionService.js for why they are split.
-    const progression = currentLevel(sessions);
-    const band = permittedBand(progression);
+    let progression = currentLevel(sessions);
 
     // ── Cold start ────────────────────────────────────────────────────────────
+    //
+    // No sessions on this concept, so there is nothing here to reason from and
+    // the model is not asked: a prediction from a feature vector of zeroes is an
+    // invention, which is how the previous version got its numbers.
+    //
+    // What the ENGINE does not know, the PLATFORM might. Study Guider holds a
+    // BKT estimate from this student's quizzes on the same concept and Code
+    // Coach counts their unresolved findings in it, so the opening level comes
+    // from those rather than from a constant. See services/coldStartService.js
+    // for the rule, the ceiling, and how to switch it off.
+    //
+    // The extra call to Study Guider is paid ONLY here - once per concept, on
+    // the first game - and never on a decision for a student who has history.
     if (features.games_played === 0) {
-        // "All students start at the Beginner level" - the proposal, section 4.1.
-        // This used to consult the heuristic and could open at the middle level,
-        // which is a worse first experience and is not what was specified.
+        progression = await seedStartingLevel({
+            conceptTag,
+            accessToken,
+            repeatErrorCount
+        });
+
         return {
             difficulty: progression.level,
             source: 'cold_start',
@@ -244,6 +260,8 @@ async function predictDifficulty({ userId, conceptTag, accessToken }) {
             reason: progression.reason
         };
     }
+
+    const band = permittedBand(progression);
 
     // ── Exploration ───────────────────────────────────────────────────────────
     // Before consulting the model, so the choice is genuinely independent of it.
