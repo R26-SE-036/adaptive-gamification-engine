@@ -165,6 +165,27 @@ Typed answers are marked by `services/gradingService.js`: whitespace outside
 string literals is insignificant, everything else is significant, and a question
 may list several accepted forms of the same fix. `npm test` covers it.
 
+## Sending rounds to the Progress Tracker
+
+FR-12. After every completed round the engine POSTs a summary to Study Guider at
+`/api/games/summary` (`services/studyGuiderClient.js`). This used to be done by
+the web page, which meant the Progress Tracker only heard about a round if a
+browser chose to tell it.
+
+The **student's own token is forwarded**, so Study Guider authenticates it the
+same way it authenticates everything else. There is no service account and no
+shared secret, and the engine cannot file a round against anyone but the student
+who played it. The dependency runs one way; Study Guider never calls back here.
+
+The send is **not awaited**. A student who has just finished a game is owed their
+score, and Study Guider being slow is not their problem - so a failure is logged
+with the session id and the round still returns. Writes are idempotent on the
+engine's own session id, so a retry cannot double-count.
+
+Set `STUDY_GUIDER_SUMMARIES=off` to stop transmitting. Deliberately an explicit
+switch rather than "unset the URL", because a silent stop is the exact failure
+this replaced.
+
 ## Hints and support
 
 Hints are **not** in the question payload. It carries `hintCount` only; each

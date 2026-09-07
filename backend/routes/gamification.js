@@ -11,6 +11,7 @@ const { recommendNextGame } = require('../services/recommendationService');
 const { gradeAnswer } = require('../services/gradingService');
 const { chooseGameType } = require('../services/gameTypeService');
 const { recommendSupport } = require('../services/supportService');
+const { sendGameSummary, summaryFrom } = require('../services/studyGuiderClient');
 const { CONCEPT_GAME_MAPPING, GAME_TYPES, DIFFICULTY_LEVELS, DIFFICULTY_ALIASES } = require('../config/constants');
 
 function getAuthenticatedUserId(req) {
@@ -505,11 +506,20 @@ router.post('/game/submit', async (req, res) => {
         });
         await session.save();
 
-        // The platform-wide record of this game lives in Code Coach, not here.
-        // The frontend posts the result to /api/v1/gamification/me/session-results
-        // as soon as this call returns, which is what updates the student's
-        // concept mastery and puts the game on their activity timeline.
+        // FR-12: transmit the summary to the Progress Tracker.
         //
+        // This is the engine doing it, not the browser. The web page still posts
+        // the result to Code Coach for the activity timeline and concept
+        // mastery, and that stays - but it meant the Progress Tracker only heard
+        // about a round if a browser chose to tell it. A closed tab, a dropped
+        // connection or a second client and the round was silently never
+        // transmitted, while FR-12 says "the system shall".
+        //
+        // Not awaited. The student has finished their game and is owed their
+        // score; Study Guider being slow is not their problem. The token is
+        // theirs, forwarded, so Study Guider authenticates this exactly as it
+        // does every other request and files the round under the student it
+        // belongs to - see services/studyGuiderClient.js.
         // A local LearningEvent used to be written here too. Nothing ever read
         // it - it was a write-only mirror of a Code Coach concept, and a third
         // place for the same fact to disagree with the other two.
@@ -594,6 +604,11 @@ router.post('/game/submit', async (req, res) => {
                     `user=${userId} concept=${conceptTag}: ${supportError.message}`
             );
         }
+
+        sendGameSummary({
+            accessToken: req.accessToken,
+            summary: summaryFrom(session, { support_action: support?.action ?? '' })
+        }).catch(() => {});
 
         const conceptLabel = conceptTag.replace(/_/g, ' ');
         const masteredThisRound = finalScore >= 80;

@@ -141,7 +141,7 @@ heuristic and the model is future work.
 | FR-09 | Assign next game type by weakness | **Done** *(Phase 4)* | Format is now a real decision, not a lookup |
 | FR-10 | Hints and support recommendations | **Done** *(Phase 5)* | Hints are server-side and counted; support is a named action with evidence |
 | FR-11 | Session summary with rationale | **Done** *(fixed today)* | The rationale was the placeholder |
-| FR-12 | Send summary to Progress Tracker | **Partly** | Happens from the *browser*, not this service — see below |
+| FR-12 | Send summary to Progress Tracker | **Done** *(Phase 6)* | The engine transmits it server-side, to its own store |
 | FR-13 | WebSocket state sync | **Missing** | Needs FR-03 |
 | FR-14 | Educators view decision logs | **Dropped** | Requires a non-student role; the platform is deliberately student-only — see §4a |
 | FR-15 | Configure thresholds without code changes | **Partly** | Some are env vars; several are still hardcoded |
@@ -225,14 +225,50 @@ because they were authored as part of that game — a request for Bug Hunt at
 Elementary falls back to another format. Filling them means authoring at the
 other three game types.
 
-**FR-12 works, but not from this component.** The proposal says *the system*
-shall send a summary to the Progress Tracker after every session. What actually
-happens is that the **web page** posts the result to Code Coach after the game
-finishes. So the data arrives — but if a student closes the tab at the wrong
-moment, or if anyone ever writes a second client, the Progress Tracker silently
-never hears about it. The engine itself has no code that talks to the Progress
-Tracker at all. Moving that call server-side would be a small change and would
-make the requirement true as written.
+**FR-12 now happens from the engine — fixed in Phase 6.** The proposal says
+*the system* shall send a summary to the Progress Tracker after every session.
+What used to happen was that the **web page** posted the result to Code Coach
+once the game finished. The data arrived, but only because a browser chose to
+send it: close the tab at the wrong moment, lose the network for a second, or
+write a second client, and the Progress Tracker silently never heard about the
+round.
+
+`services/studyGuiderClient.js` now transmits it after every session, and Study
+Guider receives it at `POST /api/games/summary`.
+
+**The student's own token is forwarded**, taken from the request that finished
+the game. That is what keeps this an integration rather than a coupling: Study
+Guider authenticates it exactly as it authenticates everything else, there is no
+service account and no shared secret, and the engine cannot file a round against
+anybody but the student who played it. Verified — a `student_id` in the body is
+ignored, and the round is filed under the token's owner.
+
+**It is stored apart from the progress graph, deliberately.** Game rounds land
+on `:GamePlay` nodes reached by a `PLAYED` relationship, with no edge into the
+`ATTEMPTED` path that knowledge tracing reads. A game score is not a
+knowledge-tracing observation: it is 100 minus 15 per hint minus 10 per extra
+attempt, so a student who gets the right answer after two hints scores 70 — a
+number BKT would read as "seven questions in ten correct", which is not what
+happened. Mixing them would not enrich the mastery estimate, it would corrupt
+it, and the corruption would be invisible because the numbers would still look
+like probabilities.
+
+Proved rather than asserted. A game was played on a concept with no quiz
+history:
+
+```
+quiz attempts   12 -> 12          (unchanged)
+mastery has it  False -> False    (unchanged)
+game store has it              True
+```
+
+**It never costs the student their round.** The send is not awaited and every
+failure is swallowed after a warning that names the session id. Verified by
+stopping Study Guider and playing: the round returned 200 in 1.8s, and the loss
+was logged rather than lost silently.
+
+Writes are idempotent — `MERGE` on the engine's own session id — so a retry
+cannot double-count.
 
 ### Hints were free, and support did not exist
 
