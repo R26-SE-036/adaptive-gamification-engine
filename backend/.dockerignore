@@ -1,0 +1,17 @@
+# Kept out of the build context.
+#
+# The Dockerfile copies config, middleware, models, routes, services and
+# server.js by name, so none of this was ever in the image - but the whole
+# context is uploaded to the daemon before the first instruction runs, and
+# ml/.venv alone is 370MB. The image installs its own dependencies from the
+# lockfile, so a host-built node_modules would also mix binaries from a
+# different platform into an Alpine image.
+node_modules
+ml
+tests
+data
+.git
+.env
+.env.*
+*.log
+npm-debug.log*
