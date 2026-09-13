@@ -1,0 +1,14 @@
+# Kept out of the build context.
+#
+# The Dockerfile copies app.py, training_data.py, retrain_from_db.py and
+# model.pkl by name. Everything below is uploaded to the daemon and then
+# ignored, and .venv is 370MB of it - the image builds its own environment
+# from requirements.txt.
+.venv
+venv
+__pycache__
+*.py[cod]
+.pytest_cache
+tests
+.git
+*.log
