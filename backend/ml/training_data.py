@@ -335,5 +335,11 @@ def load_sessions_from_mongo() -> list[dict]:
         )
 
     client = MongoClient(uri, tlsCAFile=certifi.where(), serverSelectionTimeoutMS=15000)
-    database = client[os.environ.get("MONGODB_DB_NAME", "code-guru")]
+    # The database the URI names - the one the API writes to, read from the
+    # same variable. MONGODB_DB_NAME is the fallback for a URI that names none.
+    # This used to be a fixed "code-guru", which silently trained on an empty
+    # database once each component's database was named after the component.
+    database = client.get_default_database(
+        default=os.environ.get("MONGODB_DB_NAME") or "adaptive_gamification"
+    )
     return list(database["gameSessions"].find({}))

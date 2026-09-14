@@ -98,7 +98,7 @@ chosen level, the query falls back to type-only and then concept-only.
 | `CODE_COACH_URL` | `http://127.0.0.1:8000` | Required. Nothing authenticates without it. |
 | `CODE_COACH_TIMEOUT_MS` | `10000` | |
 | `AUTH_CACHE_TTL_MS` | `60000` | A signed-out token keeps working for at most this long. |
-| `MONGODB_URI` | `mongodb://localhost:27017/code-guru` | |
+| `MONGODB_URI` | `mongodb://localhost:27017/adaptive_gamification` | |
 | `ML_SERVICE_URL` | `http://127.0.0.1:5000` | Falls back to `FLASK_ML_URL`. |
 | `ML_TIMEOUT_MS` | `5000` | |
 | `PORT` | `3002` | The Node API's port. |
