@@ -1,5 +1,10 @@
 /**
- * Seeds 75 questions into QuestionBank: 5 questions per error type × 15 error types.
+ * Seeds the Bug Hunt and Code Trace questions into QuestionBank: 5 per error type
+ * for 11 of the 15 error types. Run it FIRST - it empties QuestionBank, including
+ * the questions every other seed_*.js writes.
+ *
+ * The other four error types' questions here were Drag & Drop, retired in 602a19c
+ * and re-authored in seed_dragdrop_questions.js. The file name still says 75.
  * Run: node data/seed_75_questions.js
  */
 const mongoose = require('mongoose');
@@ -321,15 +326,37 @@ for (const q of questionsData) {
     byError[q.errorType] = (byError[q.errorType] || 0) + 1;
 }
 const counts = Object.values(byError);
-if (questionsData.length !== 75 || counts.some((c) => c !== 5)) {
-    console.error('Validation failed. Expected 75 questions (5 per error type).');
+
+// Their questions in this file were Drag & Drop, retired in 602a19c and
+// re-authored in seed_dragdrop_questions.js. This check still expected 75, so
+// from that commit on the seeder refused to run - and an empty database could
+// not be seeded at all.
+const COVERED_BY_DRAG_DROP = [
+    'ALWAYS_TRUE_OR_CONDITION',
+    'DUPLICATE_IF_ELSE_CONDITION',
+    'INCORRECT_CONDITIONAL_OPERATOR',
+    'MISSING_BREAK_IN_SWITCH'
+];
+const EXPECTED_TYPES = 15 - COVERED_BY_DRAG_DROP.length;
+const EXPECTED_QUESTIONS = EXPECTED_TYPES * 5;
+
+if (
+    questionsData.length !== EXPECTED_QUESTIONS ||
+    counts.length !== EXPECTED_TYPES ||
+    counts.some((c) => c !== 5) ||
+    COVERED_BY_DRAG_DROP.some((type) => byError[type])
+) {
+    console.error(
+        `Validation failed. Expected ${EXPECTED_QUESTIONS} questions: 5 per error type, ` +
+            `for the ${EXPECTED_TYPES} error types not covered by seed_dragdrop_questions.js.`
+    );
     console.error('Counts:', byError);
     process.exit(1);
 }
 
 mongoose.connect(process.env.MONGODB_URI)
     .then(async () => {
-        console.log('Connected to MongoDB. Seeding 75 questions (5 per error type)...');
+        console.log(`Connected to MongoDB. Seeding ${questionsData.length} questions (5 per error type)...`);
 
         await QuestionBank.deleteMany({});
         console.log('Cleared existing QuestionBank collection.');

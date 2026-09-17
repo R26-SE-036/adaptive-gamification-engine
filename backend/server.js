@@ -56,7 +56,7 @@ mongoose.connection.once('open', () => {
         .catch((error) => console.warn(`Rule configuration unavailable: ${error.message}`));
 });
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/code-guru';
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/adaptive_gamification';
 mongoose.connect(MONGODB_URI)
     .then(() => console.log('MongoDB connected'))
     .catch((err) => console.log('MongoDB connection error:', err));
