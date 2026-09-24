@@ -27,7 +27,7 @@ from dotenv import load_dotenv as _load_dotenv
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
-from training_data import DIFFICULTY_ORDINAL, HISTORY_FEATURES, LEGACY_DIFFICULTY
+from training_data import DIFFICULTY_ORDINAL, HISTORY_FEATURES, extrapolated_levels
 
 app = Flask(__name__)
 CORS(app)
@@ -193,7 +193,8 @@ def predict():
 
     chosen, reason = apply_policy(predicted)
 
-    # Levels this model has never been fitted on.
+    # Levels this model has never been fitted on, by ordinal - see
+    # training_data.extrapolated_levels.
     #
     # The corpus moved from three levels to five. A model fitted before that saw
     # difficulty_ordinal in {0, 1, 2}; asked about 3 or 4 it does not fail, it
@@ -204,9 +205,9 @@ def predict():
     # model card is that this service says so rather than answering confidently.
     # Reported, not refused: a student still needs a game, and the caller's
     # progression rule has already decided the band is appropriate.
-    trained_on = set((bundle["card"].get("provenance") or {}).get("by_difficulty") or {})
-    trained_on = {LEGACY_DIFFICULTY.get(level, level) for level in trained_on}
-    extrapolated = [level for level in candidates if trained_on and level not in trained_on]
+    extrapolated = extrapolated_levels(
+        (bundle["card"].get("provenance") or {}).get("by_difficulty"), candidates
+    )
 
     return jsonify(
         {

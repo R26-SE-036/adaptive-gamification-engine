@@ -6,7 +6,7 @@ const GameSession = require('../models/GameSession');
 const PlayerProfile = require('../models/PlayerProfile');
 const QuestionBank = require('../models/QuestionBank');
 const GameAttempt = require('../models/GameAttempt');
-const { predictDifficulty } = require('../services/difficultyService');
+const { predictDifficulty, fetchRepeatErrorCount } = require('../services/difficultyService');
 const { recommendNextGame } = require('../services/recommendationService');
 const { gradeAnswer } = require('../services/gradingService');
 const { chooseGameType } = require('../services/gameTypeService');
@@ -14,7 +14,7 @@ const { recommendSupport } = require('../services/supportService');
 const { sendGameSummary, summaryFrom } = require('../services/studyGuiderClient');
 const ruleConfig = require('../services/ruleConfigService');
 const AdaptationDecision = require('../models/AdaptationDecision');
-const { permittedBand } = require('../services/progressionService');
+const { currentLevel, permittedBand } = require('../services/progressionService');
 
 /**
  * How many of a student's recent rounds on a concept are checked before serving
@@ -758,13 +758,28 @@ router.post('/game/submit', async (req, res) => {
         // FR-10: what this student needs beyond another round. Never fails the
         // submission - a student who has just played must get their score even
         // if the support query does not come back.
+        //
+        // The progression result and the Code Coach struggle count used to be
+        // left out (`repeatErrorCount: null`, no `progression`), so rules S2 and
+        // S3 could never fire from here. Both are now measured: the progression
+        // rule reads the history including the round just saved, so `moved`
+        // says whether THIS round dropped the student a level, and the struggle
+        // count comes from Code Coach in parallel. That count is null when Code
+        // Coach is unreachable, which S2 treats as zero rather than guessing.
         let support = null;
         try {
+            const [conceptSessions, repeatErrorCount] = await Promise.all([
+                GameSession.evidence({ userId, conceptTag }).sort({ completedAt: 1 }).lean(),
+                fetchRepeatErrorCount({ conceptTag, accessToken: req.accessToken })
+            ]);
+
             support = await recommendSupport({
                 userId,
                 conceptTag,
                 lastScore: finalScore,
-                repeatErrorCount: null
+                progression: currentLevel(conceptSessions),
+                repeatErrorCount,
+                sessions: conceptSessions
             });
         } catch (supportError) {
             console.warn(
@@ -805,6 +820,11 @@ router.post('/game/submit', async (req, res) => {
             // Found by the cross-service test, which needed exactly that join.
             gameSessionId: session.gameSessionId,
             score: finalScore,
+            // The wrong attempts this server graded, and whether they were
+            // graded at all. Returned so the web page can forward the real count
+            // to Code Coach instead of deriving 0 or 1 from the score.
+            errorCount: session.errorCount,
+            errorCountMeasured: session.errorCountMeasured,
             attemptOutcome,
             learnerFeedback,
             conceptProgressMessage: learnerFeedback,

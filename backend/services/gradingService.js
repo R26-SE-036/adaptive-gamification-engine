@@ -20,10 +20,12 @@
  *
  *     for (int i = 0; i <= arr.length; i++) {
  *
- * So whitespace is insignificant and everything else is significant. The one
- * place that rule cannot apply is inside a string or character literal, where
- * spaces are part of the value: "hello world" and "helloworld" are different
- * programs. The normaliser below tracks literals for exactly that reason.
+ * So whitespace is insignificant and everything else is significant - with two
+ * exceptions. Inside a string or character literal spaces are part of the
+ * value: "hello world" and "helloworld" are different programs, so the
+ * normaliser tracks literals. And between two words, whitespace is what
+ * separates them: `int i` declares a variable and `inti` does not compile, so
+ * there it is kept as a single space rather than removed.
  */
 
 const { GAME_TYPES } = require('../config/constants');
@@ -32,14 +34,18 @@ const { GAME_TYPES } = require('../config/constants');
  * Collapse a line of Java to its significant characters.
  *
  * Removes whitespace and any trailing `//` comment, both only where they are
- * not inside a literal. Case is preserved - Java is case-sensitive and
- * `Arr.length` is a different program from `arr.length`.
+ * not inside a literal. A run of whitespace that separates two tokens which
+ * would otherwise merge - two words (`int i`), or `+ +` and `- -` - becomes one
+ * space instead. Removing it everywhere accepted `inti = 0` for `int i = 0`.
+ * Case is preserved - Java is case-sensitive and `Arr.length` is a different
+ * program from `arr.length`.
  */
 function normaliseJavaLine(line) {
     const text = String(line ?? '');
     let out = '';
     let quote = null; // '"' or "'" when inside a literal
     let escaped = false;
+    let spaced = false; // whitespace seen since the last character kept
 
     for (let i = 0; i < text.length; i += 1) {
         const char = text[i];
@@ -60,18 +66,32 @@ function normaliseJavaLine(line) {
         // ("// fixed"), not part of the code. Everything after it is dropped.
         if (char === '/' && text[i + 1] === '/') break;
 
+        if (/\s/.test(char)) {
+            spaced = true;
+            continue;
+        }
+
+        if (spaced && separates(out[out.length - 1], char)) out += ' ';
+        spaced = false;
+
         if (char === '"' || char === "'") {
             quote = char;
             out += char;
             continue;
         }
 
-        if (/\s/.test(char)) continue;
-
         out += char;
     }
 
     return out;
+}
+
+/** Whether whitespace between these two characters is part of the program. */
+function separates(before, after) {
+    if (before === undefined) return false;
+    const word = /[A-Za-z0-9_$]/;
+    if (word.test(before) && word.test(after)) return true;
+    return (before === '+' || before === '-') && after === before;
 }
 
 /**

@@ -28,6 +28,7 @@ from training_data import (  # noqa: E402
     build_rows,
     check_sufficiency,
     classify_source,
+    extrapolated_levels,
 )
 
 BASE = datetime(2026, 9, 1, 10, 0, 0)
@@ -301,3 +302,32 @@ def test_an_unknown_difficulty_is_still_dropped():
     ])
 
     assert len(frame) == 0, "a level on neither the ladder nor the legacy map is not a row"
+
+
+# ── Extrapolation is judged by ordinal ─────────────────────────────────────
+
+
+ALL_LEVELS = ["Beginner", "Elementary", "Intermediate", "Advanced", "Expert"]
+
+
+def test_a_three_level_model_has_never_seen_advanced_or_expert():
+    # The shipped card. Easy/Medium/Hard were encoded 0/1/2, so ordinals 3 and 4
+    # are new to it - and Elementary (1) is not. The name check had these the
+    # wrong way round for Elementary and Advanced.
+    card = {"Easy": 20, "Medium": 16, "Hard": 16}
+    assert extrapolated_levels(card, ALL_LEVELS) == ["Advanced", "Expert"]
+
+
+def test_a_five_level_card_is_read_by_its_own_names():
+    card = {"Beginner": 9, "Intermediate": 7, "Advanced": 5}
+    assert extrapolated_levels(card, ALL_LEVELS) == ["Elementary", "Expert"]
+
+
+def test_only_the_candidates_asked_about_are_reported():
+    card = {"Easy": 20, "Medium": 16, "Hard": 16}
+    assert extrapolated_levels(card, ["Intermediate", "Advanced"]) == ["Advanced"]
+
+
+def test_a_card_without_provenance_flags_nothing():
+    assert extrapolated_levels(None, ALL_LEVELS) == []
+    assert extrapolated_levels({}, ALL_LEVELS) == []
