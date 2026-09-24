@@ -98,9 +98,9 @@ async function recommendSupport({
             .select('score hintUsage errorCount completedAt')
             .lean());
 
-    // Newest first, and the round just finished is not in the database yet when
-    // this runs from the submit path - so it is prepended rather than assumed
-    // to be there. Counting it twice would make three failures look like four.
+    // Newest first. The submit path saves the round before calling this, so
+    // the round just finished is already in `history` - adding `lastScore` to
+    // it as well would make three failures look like four.
     const recent = [...history]
         .sort((a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0))
         .slice(0, WINDOW);

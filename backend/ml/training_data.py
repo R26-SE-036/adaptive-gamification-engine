@@ -16,7 +16,7 @@ function that holds just as well in the test half.
 Three things were wrong, in increasing order of seriousness.
 
 1. LEAKAGE. Described above. Removing those two features would not have been
-   enough either - the other four came from `simulate_students.js`, which also
+   enough either - the other four came from a simulator script, which also
    branches on the question's difficulty to choose their ranges, so the whole
    vector was a noisy function of the label.
 
@@ -100,11 +100,39 @@ ORDINAL_DIFFICULTY = {v: k for k, v in DIFFICULTY_ORDINAL.items()}
 LEGACY_DIFFICULTY = {"Easy": "Beginner", "Medium": "Intermediate", "Hard": "Advanced"}
 
 
+# The ordinals the three-level scale was ENCODED as. Not the same thing as the
+# mapping above: a model fitted before the five-level change saw Hard as 2,
+# which today's scale spends on Intermediate - it never saw a 3 or a 4.
+LEGACY_ORDINAL = {"Easy": 0, "Medium": 1, "Hard": 2}
+
+
 def canonical_difficulty(value):
     """A level name from any era of this codebase, or None."""
     if value in DIFFICULTY_ORDINAL:
         return value
     return LEGACY_DIFFICULTY.get(value)
+
+
+def extrapolated_levels(by_difficulty, candidates):
+    """The candidate levels whose ordinal the model was never fitted on.
+
+    `by_difficulty` is the model card's provenance count per level. The model
+    reads `difficulty_ordinal`, so what it has seen is a set of ordinals, and
+    the check is made on those. It used to be made on names, translating Hard to
+    Advanced: that flagged Elementary and Expert and passed Advanced - ordinal 3,
+    which the shipped three-level model has never seen.
+
+    Empty when the card does not say what it was trained on, rather than
+    flagging everything.
+    """
+    seen = {
+        DIFFICULTY_ORDINAL[name] if name in DIFFICULTY_ORDINAL else LEGACY_ORDINAL.get(name)
+        for name in (by_difficulty or {})
+    }
+    seen.discard(None)
+    if not seen:
+        return []
+    return [level for level in candidates if DIFFICULTY_ORDINAL[level] not in seen]
 
 # A session counts as a success at or above this score. Chosen to match the
 # platform's pass mark rather than picked here; it is the same 70 the quiz

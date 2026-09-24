@@ -23,6 +23,21 @@ test('whitespace outside literals is insignificant', () => {
     assert.strictEqual(normaliseJavaLine('for\t(int i = 0;\ti < arr.length; i++) {'), canonical);
 });
 
+test('whitespace between two words is kept, as one space', () => {
+    // `int i` and `inti` both normalised to `inti`, so a line that does not
+    // compile was marked correct.
+    assert.notStrictEqual(normaliseJavaLine('inti = 0;'), normaliseJavaLine('int i = 0;'));
+    assert.notStrictEqual(normaliseJavaLine('returnx;'), normaliseJavaLine('return x;'));
+    assert.strictEqual(normaliseJavaLine('int   i = 0;'), normaliseJavaLine('int	i=0;'));
+    assert.strictEqual(normaliseJavaLine('int i = 0;'), 'int i=0;');
+});
+
+test('whitespace that stops two operators merging is kept', () => {
+    // `a - -b` subtracts a negation; `a--b` does not compile.
+    assert.notStrictEqual(normaliseJavaLine('x = a - -b;'), normaliseJavaLine('x = a--b;'));
+    assert.strictEqual(normaliseJavaLine('i ++;'), normaliseJavaLine('i++;'));
+});
+
 test('whitespace INSIDE a string literal is significant', () => {
     assert.notStrictEqual(
         normaliseJavaLine('System.out.println("hello world");'),
@@ -33,19 +48,19 @@ test('whitespace INSIDE a string literal is significant', () => {
 test('a literal keeps its spaces while the code around it loses them', () => {
     assert.strictEqual(
         normaliseJavaLine('String s = "a b c" ;'),
-        'Strings="a b c";',
+        'String s="a b c";',
     );
 });
 
 test('an escaped quote does not end the literal', () => {
     assert.strictEqual(
         normaliseJavaLine('String s = "she said \\" ok";'),
-        'Strings="she said \\" ok";',
+        'String s="she said \\" ok";',
     );
 });
 
 test('char literals are treated as literals too', () => {
-    assert.strictEqual(normaliseJavaLine("char c = ' ';"), "charc=' ';");
+    assert.strictEqual(normaliseJavaLine("char c = ' ';"), "char c=' ';");
 });
 
 test('a trailing line comment is dropped', () => {
@@ -58,7 +73,7 @@ test('a trailing line comment is dropped', () => {
 test('a // inside a literal is not a comment', () => {
     assert.strictEqual(
         normaliseJavaLine('String url = "http://x";'),
-        'Stringurl="http://x";',
+        'String url="http://x";',
     );
 });
 
