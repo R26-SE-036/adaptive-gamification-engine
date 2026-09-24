@@ -128,19 +128,22 @@ cd backend && npm install && npm start
 
 Tests: `npm test` (node's built-in runner, no dependency).
 
-Seeding a fresh database:
+The question bank lives in Atlas and **cannot be fully rebuilt from this
+repository.** The original 55 BugHunt and CodeTrace questions were seeded by a
+script that has since been deleted, and exist only in the database. The seed
+files that remain add to the bank; each upserts by id, so re-running one
+replaces its own questions and touches nothing else:
 
 ```bash
-node data/seed_75_questions.js        # BugHunt / DragDrop / CodeTrace
-node data/seed_codefix_questions.js   # CodeFix, 5 per error type
+node data/seed_dragdrop_questions.js      # DragDrop
+node data/seed_codefix_questions.js       # CodeFix, one per error type per level
+node data/seed_codefix_extra.js           # CodeFix, two more per slot
+node data/seed_additional_questions.js    # BugHunt / CodeTrace, to fill thin slots
+node data/seed_elementary_expert.js       # Elementary and Expert rungs (--apply to write)
 ```
 
-Moving an existing three-level database onto the five-level ladder:
-
-```bash
-node data/migrate_to_five_levels.js           # dry run
-node data/migrate_to_five_levels.js --apply
-```
+They write to whatever `MONGODB_URI` points at - with the backend's `.env`,
+that is the live database.
 
 Then start `codeguru-web` (`npm run dev`, port 4200) and sign in with a real
 Code Coach account. The games are under **Practice**.
@@ -315,14 +318,11 @@ reads `gameSessions` from Atlas and overwrites `model.pkl`. `POST /retrain` on
 the ML service does the same thing from a request body and is guarded by the
 `X-Retrain-Secret` header.
 
-> **On training data.** `backend/data/simulate_students.js` seeds *generated*
-> sessions so the collection is not empty on a fresh database. It derives each
-> session's behaviour from the question's difficulty label, so a model trained
-> on its output is recovering that script's if/else rather than learning
-> anything about students. Use it to click through the UI; do not report a
-> metric from a model fitted on it. `retrain_from_db.py` still prints
-> "authentic human game sessions", which is wrong whenever the seeder produced
-> the rows.
+> **On training data.** Rows marked `dataSource: 'simulated'` came from a
+> local seeder, since deleted, that derived each session's behaviour from the
+> question's difficulty label - a model trained on them recovers that script's
+> if/else rather than learning anything about students. `training_data.py`
+> drops every row that is not `'real'` before fitting.
 
 ## Deployment
 

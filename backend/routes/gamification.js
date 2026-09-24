@@ -11,6 +11,7 @@ const { recommendNextGame } = require('../services/recommendationService');
 const { gradeAnswer } = require('../services/gradingService');
 const { chooseGameType } = require('../services/gameTypeService');
 const { recommendSupport } = require('../services/supportService');
+const { preferUnseen } = require('../services/questionSelection');
 const { sendGameSummary, summaryFrom } = require('../services/studyGuiderClient');
 const ruleConfig = require('../services/ruleConfigService');
 const AdaptationDecision = require('../models/AdaptationDecision');
@@ -20,12 +21,12 @@ const { currentLevel, permittedBand } = require('../services/progressionService'
  * How many of a student's recent rounds on a concept are checked before serving
  * another question from it.
  *
- * Six is a little over one pass of a five-question slot, so a student works
- * through what exists before anything comes round again. Higher would exhaust
- * the smaller slots and fall back to repeating anyway, just after a longer
- * query.
+ * It is how far back "played longest ago" can see, not a filter. It was six,
+ * which is fewer than a concept holds at one level across its formats (five to
+ * eight), so questions from two runs back already counted as unseen. Thirty
+ * covers several sittings on one concept for one indexed query.
  */
-const RECENT_QUESTION_MEMORY = Number(process.env.RECENT_QUESTION_MEMORY || 6);
+const RECENT_QUESTION_MEMORY = Number(process.env.RECENT_QUESTION_MEMORY || 30);
 const { CONCEPT_GAME_MAPPING, GAME_TYPES, DIFFICULTY_LEVELS, DIFFICULTY_ALIASES,
         nearestDifficulty } = require('../config/constants');
 
@@ -207,46 +208,32 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
 
         // ── Don't serve a question they have just seen ───────────────────────
         //
-        // The selection was `$sample: { size: 1 }` with no memory, so the same
-        // question could come back immediately - and 78 of the bank's 112
-        // (concept, level, format) slots hold exactly ONE question, which makes
-        // a repeat certain on the second visit rather than merely likely.
+        // Never-played first, then the one played longest ago - see
+        // services/questionSelection.js for why the old "exclude the recent six,
+        // else $sample" still gave students the same question round after round.
         //
-        // More questions is the real fix and it is an authoring job. Excluding
-        // what they have recently played costs one indexed query and makes the
-        // 150 that exist go much further.
+        // PREFERENCE, NOT A FILTER. "You have played them all" must mean "here
+        // is the stalest one again", never "no game for you".
         //
-        // EXCLUSION IS A PREFERENCE, NOT A FILTER. Every query below falls back
-        // to ignoring it, because "you have seen them all" must mean "here is
-        // one again", never "no game for you".
-        // Invalidated rounds are excluded here too, and for a reason beyond
-        // consistency: a question withdrawn because it was defective has since
-        // been re-authored, so it is one we actively WANT to serve again rather
-        // than suppress as recently seen.
+        // Invalidated rounds are left out of the history, and for a reason
+        // beyond consistency: a question withdrawn because it was defective has
+        // since been re-authored, so it is one we actively WANT to serve again
+        // rather than suppress as recently seen.
         const recentlyPlayed = await GameSession.evidence({ userId, conceptTag })
             .sort({ completedAt: -1 })
             .limit(RECENT_QUESTION_MEMORY)
             .select('questionId')
             .lean();
 
-        const seen = [...new Set(recentlyPlayed.map((row) => row.questionId).filter(Boolean))];
+        const recentIds = recentlyPlayed.map((row) => row.questionId).filter(Boolean);
 
-        /** One question matching `match`, preferring one not recently seen. */
-        const pick = async (match) => {
-            if (seen.length > 0) {
-                const fresh = await QuestionBank.aggregate([
-                    { $match: { ...match, id: { $nin: seen } } },
-                    { $sample: { size: 1 } }
-                ]);
-                if (fresh.length > 0) return fresh;
-            }
+        /** The best question matching `match`, as {question, fresh}, or null. */
+        const pick = async (match) =>
+            preferUnseen(await QuestionBank.find(match).lean(), recentIds);
 
-            return QuestionBank.aggregate([{ $match: match }, { $sample: { size: 1 } }]);
-        };
-
-        let questions = resolvedGameType && resolvedDifficulty
+        let chosen = resolvedGameType && resolvedDifficulty
             ? await pick({ gameType: resolvedGameType, conceptTag, difficulty: resolvedDifficulty })
-            : [];
+            : null;
 
         // ── Falling back to the NEAREST level, not to any level ──────────────
         //
@@ -257,7 +244,7 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
         // because the session is recorded at the SERVED level and
         // progressionService reads that back as where the student is, the
         // fallback was quietly promoting people. See nearestDifficulty().
-        if (questions.length === 0 && resolvedGameType && resolvedDifficulty) {
+        if (!chosen && resolvedGameType && resolvedDifficulty) {
             const available = await QuestionBank.distinct('difficulty', {
                 gameType: resolvedGameType,
                 conceptTag
@@ -265,7 +252,7 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
 
             const nearest = nearestDifficulty(resolvedDifficulty, available);
             if (nearest) {
-                questions = await pick({
+                chosen = await pick({
                     gameType: resolvedGameType,
                     conceptTag,
                     difficulty: nearest
@@ -273,23 +260,59 @@ router.get('/game/:userId/:gameType/:conceptTag/:difficulty', async (req, res) =
             }
         }
 
+        // ── Everything in this format played: try another, at the same level ──
+        //
+        // A slot holds two to four questions and a run is five rounds, so a run
+        // that stays in one format used to spend its last rounds on repeats
+        // while the same concept at the same level had unseen questions in its
+        // other formats. The level is kept exactly - it is what progression
+        // reads back - and only the format changes, which the chooser re-decides
+        // every round anyway. The student is told why.
+        if (chosen && !chosen.fresh) {
+            const level = chosen.question.difficulty;
+            const elsewhere = await pick({
+                conceptTag,
+                difficulty: level,
+                gameType: { $in: GAME_TYPES.filter((type) => type !== chosen.question.gameType) }
+            });
+
+            if (elsewhere?.fresh) {
+                gameTypeChosenBy = 'unseen_format';
+                gameTypeReason =
+                    `You have recently played every ${chosen.question.gameType} question on ` +
+                    `${conceptTag.replace(/_/g, ' ')} at ${level}, so this one is ` +
+                    `${elsewhere.question.gameType} instead of a repeat.`;
+                chosen = elsewhere;
+
+                // The decision was recorded with the format asked for. Best
+                // effort, like the decision itself.
+                if (decisionId) {
+                    AdaptationDecision.updateOne(
+                        { decisionId },
+                        { $set: { gameType: chosen.question.gameType } }
+                    ).catch((error) =>
+                        console.warn(`[decision] Could not update the format: ${error.message}`)
+                    );
+                }
+            }
+        }
+
         // Type unresolved, or the type has nothing at all for this concept.
-        if (questions.length === 0) {
+        if (!chosen) {
             if (resolvedDifficulty) {
                 const available = await QuestionBank.distinct('difficulty', { conceptTag });
                 const nearest = nearestDifficulty(resolvedDifficulty, available);
-                if (nearest) questions = await pick({ conceptTag, difficulty: nearest });
+                if (nearest) chosen = await pick({ conceptTag, difficulty: nearest });
             }
 
-            if (questions.length === 0) questions = await pick({ conceptTag });
+            if (!chosen) chosen = await pick({ conceptTag });
 
-            if (questions.length === 0) {
+            if (!chosen) {
                  return res.status(404).json({ error: 'No matching game found in database' });
             }
         }
 
-        // Return a random match
-        const selected = questions[0];
+        const selected = chosen.question;
         
         // Strip everything the student is meant to earn rather than receive.
         //
@@ -627,7 +650,7 @@ router.post('/game/submit', async (req, res) => {
             // computed here and never taken from the client.
             wasExploratory: wasExploratory === true,
 
-            // Defaults to 'real'; the local seeder marks its own rows
+            // Defaults to 'real'; a seeder or test client marks its rows
             // 'simulated' so the trainer drops them. Only these two
             // downgrades are accepted from the client - a caller cannot
             // promote anything TO 'real', and marking your own row as

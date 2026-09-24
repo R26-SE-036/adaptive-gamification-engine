@@ -16,7 +16,7 @@ function that holds just as well in the test half.
 Three things were wrong, in increasing order of seriousness.
 
 1. LEAKAGE. Described above. Removing those two features would not have been
-   enough either - the other four came from `simulate_students.js`, which also
+   enough either - the other four came from a simulator script, which also
    branches on the question's difficulty to choose their ranges, so the whole
    vector was a noisy function of the label.
 
