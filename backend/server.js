@@ -35,6 +35,10 @@ app.use(express.json());
 // gated by RULE_CONFIG_SECRET instead. See routes/ruleConfig.js.
 app.use('/api/v1/gamification/rules', require('./routes/ruleConfig'));
 
+// The reward loop's read routes (overview, leaderboards, daily challenge).
+// Before the game router, and authenticated per route - see routes/rewards.js.
+app.use('/api/v1/gamification', require('./routes/rewards'));
+
 const gamificationRoutes = require('./routes/gamification');
 app.use('/api/v1/gamification', gamificationRoutes);
 
