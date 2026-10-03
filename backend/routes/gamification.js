@@ -16,6 +16,7 @@ const { sendGameSummary, summaryFrom } = require('../services/studyGuiderClient'
 const ruleConfig = require('../services/ruleConfigService');
 const AdaptationDecision = require('../models/AdaptationDecision');
 const { currentLevel, permittedBand } = require('../services/progressionService');
+const rewardsService = require('../services/rewardsService');
 
 /**
  * How many of a student's recent rounds on a concept are checked before serving
@@ -526,9 +527,9 @@ router.post('/game/hint', async (req, res) => {
 // POST /api/v1/gamification/game/submit
 router.post('/game/submit', async (req, res) => {
     try {
-        const { userId, learningSessionId, gameType, conceptTag, selectedAnswer, 
+        const { userId, learningSessionId, gameType, conceptTag, selectedAnswer,
                 hintUsage, timeTakenSeconds, attemptCount, questionId, traceAccuracy,
-                wasExploratory, dataSource, decisionId } = req.body;
+                wasExploratory, dataSource, decisionId, mode } = req.body;
 
         if (!userId || !learningSessionId || !gameType || !conceptTag || selectedAnswer === undefined || !questionId) {
             return res.status(400).json({ error: 'Missing required fields for game submission' });
@@ -715,49 +716,34 @@ router.post('/game/submit', async (req, res) => {
         // it - it was a write-only mirror of a Code Coach concept, and a third
         // place for the same fact to disagree with the other two.
 
-        // Badge and Streak Logic (Gamification Engine)
-        let profile = await PlayerProfile.findOne({ userId });
-        if (!profile) {
-            profile = new PlayerProfile({ userId });
+        // ── Rewards: XP, level, streak, achievements, quests, daily ──────────
+        //
+        // All of it decided in services/rewardsService.js from the session just
+        // saved, so nothing the client sends can earn a point. The streak and
+        // the three concept badges that used to be worked out inline here live
+        // there now too, with the day boundary at local midnight rather than
+        // the server's - see services/rewards/calendar.js.
+        //
+        // `mode: 'daily'` only counts when this really is today's challenge
+        // question and the first attempt at it; anything else is practice.
+        //
+        // Never fails the submission: the round is saved and the student is
+        // owed their score even if the reward write does not come back.
+        let rewards = null;
+        try {
+            const isDaily =
+                mode === 'daily' && (await rewardsService.isDailyAttempt(userId, questionId));
+            rewards = await rewardsService.applyRound({
+                userId,
+                fullName: req.user?.fullName,
+                session,
+                isDaily
+            });
+        } catch (rewardError) {
+            console.warn(
+                `[rewards] Could not apply rewards for user=${userId}: ${rewardError.message}`
+            );
         }
-
-        const now = new Date();
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        
-        let newBadgesUnlocked = [];
-
-        if (profile.lastGamePlayedAt) {
-            const lastPlayedDate = new Date(profile.lastGamePlayedAt);
-            const startOfLastPlayed = new Date(lastPlayedDate.getFullYear(), lastPlayedDate.getMonth(), lastPlayedDate.getDate());
-            
-            const diffTime = Math.abs(startOfToday - startOfLastPlayed);
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-            
-            if (diffDays === 1) {
-                profile.currentStreak += 1;
-            } else if (diffDays > 1) {
-                profile.currentStreak = 1;
-            }
-        } else {
-            profile.currentStreak = 1;
-        }
-
-        profile.lastGamePlayedAt = now;
-        profile.totalScore += finalScore;
-
-        if (finalScore === 100) {
-            let badgeName = '';
-            if (conceptTag === 'loop_boundaries') badgeName = 'Loop Master';
-            if (conceptTag === 'array_indexing') badgeName = 'Array Ninja';
-            if (conceptTag === 'conditional_logic') badgeName = 'Logic Guru';
-            
-            if (badgeName && !profile.badges.includes(badgeName)) {
-                profile.badges.push(badgeName);
-                newBadgesUnlocked.push(badgeName);
-            }
-        }
-
-        await profile.save();
 
         // FR-09 and FR-11: what to play next, and the reason for it. Computed
         // from this student's own sessions - see services/recommendationService.js
@@ -860,8 +846,11 @@ router.post('/game/submit', async (req, res) => {
             referenceAnswer: question.correctAnswer,
             correctAnswer: question.correctAnswer,
             explanation: question.explanation,
-            newBadges: newBadgesUnlocked,
-            currentStreak: profile.currentStreak,
+            newBadges: rewards?.legacyBadges ?? [],
+            currentStreak: rewards?.streak.current ?? null,
+            // What the round earned. Null only when the reward write failed,
+            // in which case the score above still stands.
+            rewards,
             // Was the string 'Optional: further recommendation logic', sent to
             // the client on every completed game. FR-09 in full is now below.
             nextRecommendedGame: recommendation ? recommendation.gameType : null,
