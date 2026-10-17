@@ -44,7 +44,26 @@ const ERROR_TYPES = [
     'DIVISION_BY_ZERO_LITERAL',
     'CONSTANT_FALSE_LOOP_CONDITION',
     'DUPLICATE_IF_ELSE_CONDITION',
-    'WHILE_VARIABLE_NOT_UPDATED'
+    'WHILE_VARIABLE_NOT_UPDATED',
+    // The rest of Code Coach's catalogue. GameSession.errorType is an enum of
+    // this list, so a question about any type missing here would lose its
+    // whole result when the session is saved.
+    'INTEGER_DIVISION_IN_DECIMAL_CONTEXT',
+    'DECIMAL_EQUALITY_COMPARISON',
+    'POSTFIX_INCREMENT_ASSIGNED_BACK',
+    'ALWAYS_FALSE_AND_CONDITION',
+    // The eleven added in Code Coach's 30-type upgrade.
+    'LOOP_SKIPS_LAST_ELEMENT',
+    'INDEX_PLUS_ONE_OUT_OF_BOUNDS',
+    'WRONG_LOOP_VARIABLE_IN_INDEX',
+    'NESTED_LOOP_WRONG_COUNTER',
+    'LOOP_COUNTER_CHANGED_IN_BODY',
+    'ACCUMULATOR_RESET_INSIDE_LOOP',
+    'WRONG_EXTREME_INITIAL_VALUE',
+    'EARLY_RETURN_IN_LOOP',
+    'UNREACHABLE_ELSE_IF_ORDER',
+    'MISLEADING_INDENTATION_NO_BRACES',
+    'NON_SHORT_CIRCUIT_OPERATOR'
 ];
 
 /**
