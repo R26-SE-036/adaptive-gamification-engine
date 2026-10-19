@@ -140,6 +140,7 @@ node data/seed_codefix_questions.js       # CodeFix, one per error type per leve
 node data/seed_codefix_extra.js           # CodeFix, two more per slot
 node data/seed_additional_questions.js    # BugHunt / CodeTrace, to fill thin slots
 node data/seed_elementary_expert.js       # Elementary and Expert rungs (--apply to write)
+node data/seed_new_error_types.js         # the eleven newest Code Coach error types (--apply to write)
 ```
 
 They write to whatever `MONGODB_URI` points at - with the backend's `.env`,
@@ -337,5 +338,6 @@ restart policy, logs and health check, and one crashing does not take the other
 down.
 
 The ML service has **no authentication and permissive CORS by design**, on the
-assumption this backend sits in front of it. It must go in a private subnet
-reachable only from this service, and must never be given a public listener.
+assumption this backend sits in front of it. In the deployment it is on the
+internal Docker network with no published port, reachable only from this
+service, and it must never be given a public listener.
